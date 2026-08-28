@@ -22,6 +22,8 @@
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   window._fb = { ref, get, set, onValue, db };
+  window._fbReady = true;
+  window.dispatchEvent(new Event('fb-ready'));
 </script>
 <style>
   :root{
@@ -96,7 +98,15 @@
     background:var(--panel);border:1px solid var(--line);border-radius:12px;
     padding:11px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;
     border-left:4px solid var(--gray);
+    position:relative;overflow:hidden;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
   }
+  .press-fill{
+    position:absolute;left:0;top:0;bottom:0;width:0;
+    background:rgba(245,166,35,.22);z-index:0;pointer-events:none;
+  }
+  .card .cbody{position:relative;z-index:1;}
+  .card .amount{position:relative;z-index:1;}
   .card.st-idle{border-left-color:var(--amber);}
   .card.st-prep{border-left-color:var(--blue);}
   .card.st-dispatch{border-left-color:var(--purple);}
@@ -509,7 +519,13 @@ function render(){
       const soon = (!due && v.returnDate) ? isReturnSoon(v.returnDate) : false;
       const cardExtraClass = due ? ' return-alert' : (soon ? ' return-soon-alert' : '');
       return `
-        <div class="card ${sc}${cardExtraClass}" onclick="openModal('${v.plate}')">
+        <div class="card ${sc}${cardExtraClass}"
+          onclick="handleCardClick(event,'${v.plate}')"
+          onpointerdown="startPressHold(event,'${v.plate}')"
+          onpointerup="cancelPressHold(event)"
+          onpointerleave="cancelPressHold(event)"
+          onpointercancel="cancelPressHold(event)">
+          <span class="press-fill"></span>
           <div class="cbody">
             <div class="row1">
               <span class="plate-tag plate">${v.plate}</span>
@@ -528,6 +544,53 @@ function render(){
     }).join('');
     return `<div class="section-title"><span>${branch}</span><span>${items.length}대</span></div>${cards}`;
   }).join('');
+}
+
+let _pressTimer = null;
+let _pressTriggered = false;
+
+function startPressHold(e, plate){
+  const card = e.currentTarget;
+  const fill = card.querySelector('.press-fill');
+  _pressTriggered = false;
+  if(fill){
+    fill.style.transition = 'none';
+    fill.style.width = '0%';
+    void fill.offsetWidth;
+    fill.style.transition = 'width 3000ms linear';
+    fill.style.width = '100%';
+  }
+  clearTimeout(_pressTimer);
+  _pressTimer = setTimeout(()=>{
+    _pressTriggered = true;
+    if(navigator.vibrate) navigator.vibrate(40);
+    setVehicleIdle(plate);
+  }, 3000);
+}
+function cancelPressHold(e){
+  clearTimeout(_pressTimer);
+  const card = e.currentTarget;
+  const fill = card ? card.querySelector('.press-fill') : null;
+  if(fill){
+    fill.style.transition = 'width 150ms linear';
+    fill.style.width = '0%';
+  }
+}
+function handleCardClick(e, plate){
+  if(_pressTriggered){
+    _pressTriggered = false;
+    return;
+  }
+  openModal(plate);
+}
+async function setVehicleIdle(plate){
+  const v = vehicles.find(x=>x.plate===plate);
+  if(!v) return;
+  v.status = '대기';
+  v.startDate = null;
+  render();
+  await persist();
+  showToast(`${plate} 대기 상태로 변경되었습니다`);
 }
 
 function openModal(plate){
@@ -688,6 +751,9 @@ function setDate(){
 
 (async function init(){
   setDate();
+  if(!window._fbReady){
+    await new Promise(resolve => window.addEventListener('fb-ready', resolve, {once:true}));
+  }
   await loadData();
   render();
   startRealtimeSync();
