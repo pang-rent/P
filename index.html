@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>장성영업소 차량 현황판</title>
+<script type="module">
+  // ▼▼▼ Firebase 콘솔(console.firebase.google.com)에서 프로젝트 생성 후
+  //     '프로젝트 설정 > 일반 > 내 앱 > SDK 설정 및 구성'에서 이 값들을 그대로 복붙하세요.
+  //     Realtime Database도 만들고 '테스트 모드'로 시작하면 됩니다.
+  const firebaseConfig = {
+    apiKey: "AIzaSyDLMLiu492qkW8VnPFcENddc7Hx_D-ocWY",
+    authDomain: "jangsung-4d5e3.firebaseapp.com",
+    databaseURL: "https://jangsung-4d5e3-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "jangsung-4d5e3",
+    storageBucket: "jangsung-4d5e3.firebasestorage.app",
+    messagingSenderId: "390123603041",
+    appId: "1:390123603041:web:35bbc4059db12d586e5620"
+  };
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  import { getDatabase, ref, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  window._fb = { ref, get, set, onValue, db };
+</script>
+<style>
+  :root{
+    --bg:#0f172a;
+    --panel:#16213a;
+    --panel2:#1c2947;
+    --line:#2a3757;
+    --text:#e8ecf7;
+    --sub:#8b96b8;
+    --amber:#f5a623;
+    --green:#34d399;
+    --blue:#5b9dff;
+    --purple:#c084fc;
+    --red:#f87171;
+    --gray:#64748b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo",sans-serif;
+    padding-bottom:40px;
+  }
+  .plate{font-family:"SFMono-Regular",Consolas,monospace;letter-spacing:0.5px;}
+
+  header{
+    position:sticky;top:0;z-index:20;
+    background:linear-gradient(180deg,#0f172a 0%,#0f172a 85%,transparent 100%);
+    padding:14px 14px 8px;
+    border-bottom:1px solid var(--line);
+  }
+  header .title-row{display:flex;justify-content:space-between;align-items:baseline;}
+  header h1{font-size:17px;margin:0;font-weight:700;}
+  header .date{font-size:11px;color:var(--sub);}
+  .refresh-btn{
+    background:var(--panel2);border:1px solid var(--line);color:var(--amber);
+    border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
+  }
+
+  .stats{display:flex;gap:6px;margin-top:10px;overflow-x:auto;padding-bottom:2px;}
+  .stat{
+    flex:0 0 auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:6px 10px;text-align:center;min-width:52px;
+    cursor:pointer;user-select:none;transition:border-color .15s,background .15s;
+  }
+  .stat b{display:block;font-size:15px;}
+  .stat span{font-size:10px;color:var(--sub);}
+  .stat.amber b{color:var(--amber);}
+  .stat.blue b{color:var(--blue);}
+  .stat.purple b{color:var(--purple);}
+  .stat.green b{color:var(--green);}
+  .stat.active{background:var(--panel2);border-color:currentColor;}
+  .stat.amber.active{color:var(--amber);}
+  .stat.blue.active{color:var(--blue);}
+  .stat.green.active{color:var(--green);}
+
+  .search-row{display:flex;gap:8px;margin-top:10px;}
+  .search-row input{
+    flex:1;background:var(--panel);border:1px solid var(--line);color:var(--text);
+    border-radius:9px;padding:9px 12px;font-size:14px;
+  }
+
+  main{padding:12px;}
+  .section-title{
+    font-size:13px;font-weight:700;color:var(--sub);margin:16px 4px 8px;
+    display:flex;justify-content:space-between;
+  }
+  .section-title:first-child{margin-top:4px;}
+
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:11px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;
+    border-left:4px solid var(--gray);
+  }
+  .card.st-idle{border-left-color:var(--amber);}
+  .card.st-prep{border-left-color:var(--blue);}
+  .card.st-dispatch{border-left-color:var(--purple);}
+  .card.st-running{border-left-color:var(--green);}
+  .card .cbody{flex:1;min-width:0;}
+  .row1{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .plate-tag{font-size:15px;font-weight:700;}
+  .badge{
+    font-size:10.5px;padding:2px 7px;border-radius:20px;font-weight:700;
+    background:var(--panel2);color:var(--sub);
+  }
+  .badge.st-idle{background:rgba(245,166,35,.18);color:var(--amber);}
+  .badge.st-prep{background:rgba(91,157,255,.18);color:var(--blue);}
+  .badge.st-dispatch{background:rgba(192,132,252,.18);color:var(--purple);}
+  .badge.st-running{background:rgba(52,211,153,.15);color:var(--green);}
+  .type-badge{
+    font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700;
+    background:var(--panel2);color:var(--sub);
+  }
+  .type-badge.tp-보험{background:rgba(91,157,255,.15);color:var(--blue);}
+  .type-badge.tp-일반{background:rgba(139,150,184,.15);color:var(--sub);}
+  .type-badge.tp-서비스{background:rgba(245,166,35,.15);color:var(--amber);}
+  .type-badge.tp-장기{background:rgba(192,132,252,.15);color:var(--purple);}
+  .model{font-size:12.5px;color:var(--sub);margin-top:2px;}
+  .note{font-size:12.5px;color:var(--text);margin-top:3px;opacity:.9;}
+  .extra{font-size:10.5px;color:var(--sub);margin-top:2px;}
+  .return-due{
+    color:var(--red);font-weight:700;
+    animation:blinkText 1s ease-in-out infinite;
+  }
+  .badge.return-due{background:rgba(248,113,113,.18);}
+  @keyframes blinkText{
+    0%,100%{opacity:1;}
+    50%{opacity:.35;}
+  }
+  .card.return-alert{
+    border-left-color:var(--red);
+    animation:blinkCard 1.4s ease-in-out infinite;
+  }
+  @keyframes blinkCard{
+    0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,0);}
+    50%{box-shadow:0 0 0 3px rgba(248,113,113,.35);}
+  }
+  .return-soon{color:var(--amber);font-weight:700;}
+  .badge.return-soon{background:rgba(245,166,35,.18);}
+  .card.return-soon-alert{border-left-color:var(--amber);}
+  .amount{font-size:11px;color:var(--sub);white-space:nowrap;}
+  .empty{text-align:center;color:var(--sub);font-size:13px;padding:30px 0;}
+
+  .modal-bg{
+    position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;
+    display:none;align-items:flex-end;justify-content:center;
+  }
+  .modal-bg.open{display:flex;}
+  .modal{
+    background:var(--panel);width:100%;max-width:480px;border-radius:16px 16px 0 0;
+    padding:18px 16px 24px;border:1px solid var(--line);border-bottom:none;
+    max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  }
+  .modal h3{margin:0 0 2px;font-size:16px;}
+  .modal .sub{color:var(--sub);font-size:12px;margin-bottom:14px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:5px;}
+  .field input{
+    width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:9px;padding:10px 12px;font-size:14px;
+  }
+  .field input:disabled{opacity:.55;}
+  .field select{
+    width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:9px;padding:10px 12px;font-size:14px;
+  }
+  .quick-opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}
+  .quick-opts button{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:20px;padding:5px 11px;font-size:12px;
+  }
+  .modal-actions{display:flex;gap:8px;margin-top:16px;}
+  .modal-actions button{flex:1;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:700;}
+  .btn-cancel{background:var(--panel2);color:var(--sub);}
+  .btn-save{background:var(--amber);color:#1a1a1a;}
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    padding:9px 16px;border-radius:20px;font-size:12.5px;z-index:60;opacity:0;
+    transition:opacity .25s;pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+
+  .fab{
+    position:fixed;right:18px;bottom:24px;z-index:40;
+    width:52px;height:52px;border-radius:50%;border:none;
+    background:var(--amber);color:#1a1a1a;font-size:26px;font-weight:700;
+    box-shadow:0 6px 16px rgba(0,0,0,.4);line-height:1;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-row">
+    <div>
+      <h1>🚗 장성영업소 차량 현황판</h1>
+      <div class="date" id="dateLine"></div>
+    </div>
+    <button class="refresh-btn" onclick="reload(true)">↻ 새로고침</button>
+  </div>
+  <div class="stats" id="statsRow"></div>
+  <div class="search-row">
+    <input id="searchInput" placeholder="차량번호 / 담당자 / 메모 검색" oninput="render()">
+    <select id="sortSelect" onchange="render()" style="background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:9px 10px;font-size:13px;">
+      <option value="default">기본순</option>
+      <option value="plate">차량번호순</option>
+      <option value="status">상태순</option>
+    </select>
+  </div>
+</header>
+
+<button class="fab" id="fabAdd" onclick="openAddModal()">+</button>
+
+<main id="main"></main>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 class="plate" id="mPlate"></h3>
+    <div class="sub" id="mModel"></div>
+    <div class="field">
+      <label>구분</label>
+      <select id="mType" onchange="toggleAmountField('m')">
+        <option value="">선택 안함</option>
+        <option value="보험">보험</option>
+        <option value="일반">일반</option>
+        <option value="서비스">서비스</option>
+        <option value="장기">장기</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>대여일 (입력하면 그날부터 자동으로 일수 카운팅)</label>
+      <input id="mStartDate" type="date">
+    </div>
+    <div class="field">
+      <label>상태 (자동 일수 카운팅 중이 아닐 때 사용)</label>
+      <input id="mStatus" placeholder="운행중">
+      <div class="quick-opts">
+        <button type="button" onclick="setStatus('')">운행중</button>
+        <button type="button" onclick="setStatus('대기')">대기</button>
+        <button type="button" onclick="setStatus('준비중')">준비중</button>
+        <button type="button" onclick="setStatus('차고지')">차고지</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>비고 (담당자 / 반납예정일 등)</label>
+      <input id="mNote" placeholder="예: 윤상 그랜저">
+    </div>
+    <div class="field">
+      <label style="display:flex;justify-content:space-between;align-items:center;">
+        <span>추가정보 (자차 / 연령 / 특약 등)</span>
+        <button type="button" id="mExtraToggle" onclick="toggleExtraEdit()" style="background:var(--panel2);border:1px solid var(--line);color:var(--amber);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;">✎ 수정</button>
+      </label>
+      <input id="mExtra" placeholder="예: 자차:o·26세·IMS관제" disabled>
+    </div>
+    <div class="field" id="mAmountField" style="display:none;">
+      <label>금액 (만원)</label>
+      <input id="mAmount" type="number" placeholder="예: 110">
+    </div>
+    <div class="field" id="mPayDayField" style="display:none;">
+      <label>결제일 (매월 며칠)</label>
+      <input id="mPayDay" type="number" min="1" max="31" placeholder="예: 5">
+    </div>
+    <div class="field" id="mReturnDateField" style="display:none;">
+      <label>반납일자</label>
+      <input id="mReturnDate" type="date">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-save" onclick="saveModal()">저장</button>
+    </div>
+    <div class="modal-actions" style="margin-top:8px;">
+      <button id="deleteBtn"
+        onpointerdown="startDeletePress()" onpointerup="cancelDeletePress()"
+        onpointerleave="cancelDeletePress()" onpointercancel="cancelDeletePress()"
+        style="position:relative;overflow:hidden;flex:1;padding:10px;border-radius:10px;border:1px solid var(--red);background:transparent;color:var(--red);font-size:13px;font-weight:700;">
+        <span id="deleteFill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:var(--red);opacity:.4;z-index:0;"></span>
+        <span style="position:relative;z-index:1;">🗑 길게 눌러서 삭제</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="addModalBg">
+  <div class="modal">
+    <h3>차량 추가</h3>
+    <div class="sub">새 차량 정보를 입력하세요</div>
+    <div class="field">
+      <label>차량번호 *</label>
+      <input id="aPlate" placeholder="예: 105하9600">
+    </div>
+    <div class="field">
+      <label>구역</label>
+      <input id="aBranch" placeholder="장성 / 장기" list="branchList">
+      <datalist id="branchList">
+        <option value="장성"></option>
+        <option value="장기"></option>
+      </datalist>
+    </div>
+    <div class="field">
+      <label>종별 / 차종</label>
+      <input id="aCls" placeholder="예: 중형">
+    </div>
+    <div class="field">
+      <input id="aModel" placeholder="예: K5">
+    </div>
+    <div class="field">
+      <label>연료</label>
+      <input id="aFuel" placeholder="예: LPG / 가솔린 / 디젤">
+    </div>
+    <div class="field">
+      <label>추가정보 (자차 / 연령 / 특약 등)</label>
+      <input id="aExtra" placeholder="예: 자차:o·26세·IMS관제">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeAddModal()">취소</button>
+      <button class="btn-save" onclick="saveAddModal()">추가</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'fleet-vehicles-jangseong-v1';
+
+const SEED = [
+{no:'1',plate:'105하8495',branch:'장성',cls:'대형',model:'그랜저GN7',fuel:'LPG',status:'',extra:'자차:o',type:'보험',note:'수완현대 싼타페',amount:null,startDate:null},
+{no:'2',plate:'105하9581',branch:'장성',cls:'소형',model:'셀토스',fuel:'가솔린',status:'',extra:'자차:o·26세·IMS관제',type:'',note:'한진서비스',amount:null,startDate:null},
+{no:'3',plate:'105하9584',branch:'장성',cls:'중형',model:'쏘나타디엣지',fuel:'LPG',status:'',extra:'자차:o',type:'보험',note:'1급 셀토스',amount:null,startDate:null},
+{no:'4',plate:'105하9585',branch:'장성',cls:'중형',model:'쏘나타디엣지',fuel:'LPG',status:'',extra:'자차:o',type:'보험',note:'1급 아반떼',amount:null,startDate:null},
+{no:'5',plate:'105하9587',branch:'장성',cls:'경형',model:'캐스퍼',fuel:'가솔린',status:'',extra:'자차:o',type:'보험',note:'윤상 모닝',amount:null,startDate:null},
+{no:'6',plate:'105하9588',branch:'장성',cls:'대형',model:'그랜저 GN',fuel:'LPG',status:'대기',extra:'자차:o',type:'',note:'차고지',amount:null,startDate:null},
+{no:'9',plate:'105하9592',branch:'장성',cls:'중형',model:'K5',fuel:'LPG',status:'',extra:'자차:o',type:'서비스',note:'윤상 카니발',amount:null,startDate:null},
+{no:'10',plate:'105하9593',branch:'장성',cls:'중형',model:'K5',fuel:'LPG',status:'준비중',extra:'자차:o',type:'',note:'장성',amount:null,startDate:null},
+{no:'11',plate:'105하9598',branch:'장성',cls:'대형',model:'쏘렌토',fuel:'가솔린',status:'준비중',extra:'자차:o',type:'',note:'장성',amount:null,startDate:null},
+{no:'13',plate:'105하9738',branch:'장성',cls:'대형',model:'펠리세이드',fuel:'가솔린',status:'',extra:'자차:o',type:'보험',note:'수완현대 쏘렌토',amount:null,startDate:null},
+{no:'7',plate:'105하9590',branch:'장기',cls:'대형',model:'싼타페',fuel:'LPG',status:'2일',extra:'자차:o·26세임직원',type:'장기',note:'편안',amount:110,startDate:null},
+{no:'8',plate:'105하9591',branch:'장기',cls:'대형',model:'싼타페',fuel:'LPG',status:'5일',extra:'자차:o·26세임직원',type:'장기',note:'편안',amount:110,startDate:null},
+{no:'12',plate:'105하9735',branch:'장기',cls:'소형',model:'셀토스',fuel:'',status:'26일',extra:'자차:o·26세임직원',type:'장기',note:'편안',amount:60,startDate:null},
+];
+
+let vehicles = [];
+
+function daysSince(dateStr){
+  const start = new Date(dateStr+'T00:00:00');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const diff = Math.floor((today-start)/86400000)+1;
+  return diff<1 ? 1 : diff;
+}
+function formatReturnDate(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const diffDays = Math.round((d-today)/86400000);
+  const dDay = diffDays===0 ? 'D-day' : (diffDays>0 ? `D-${diffDays}` : `D+${-diffDays}`);
+  return `${d.getMonth()+1}월 ${d.getDate()}일 (${dDay})`;
+}
+function isReturnDue(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  return d <= today;
+}
+function isReturnSoon(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const diffDays = Math.round((d-today)/86400000);
+  return diffDays>0 && diffDays<=3;
+}
+function statusClass(v){
+  if(v.startDate) return 'st-dispatch';
+  if(v.status==='대기') return 'st-idle';
+  if(v.status==='준비중') return 'st-prep';
+  return 'st-running';
+}
+function statusLabel(v){
+  if(v.startDate) return `${daysSince(v.startDate)}일째`;
+  return v.status ? v.status : '운행중';
+}
+
+let _suppressNextRemote = false;
+
+async function loadData(){
+  const { ref, get, set, db } = window._fb;
+  try{
+    const snap = await get(ref(db, STORAGE_KEY));
+    if(snap.exists()){
+      vehicles = snap.val();
+    } else {
+      vehicles = SEED.slice();
+      await set(ref(db, STORAGE_KEY), vehicles);
+    }
+  }catch(e){
+    console.error(e);
+    vehicles = SEED.slice();
+    showToast('연결 실패 - Firebase 설정을 확인하세요');
+  }
+}
+
+async function persist(){
+  const { ref, set, db } = window._fb;
+  try{
+    _suppressNextRemote = true;
+    await set(ref(db, STORAGE_KEY), vehicles);
+    showToast('저장됨 · 다른 직원 화면에도 실시간 반영됩니다');
+  }catch(e){
+    showToast('저장 실패 - 다시 시도해주세요');
+  }
+}
+
+function startRealtimeSync(){
+  const { ref, onValue, db } = window._fb;
+  onValue(ref(db, STORAGE_KEY), (snap)=>{
+    if(_suppressNextRemote){ _suppressNextRemote = false; return; }
+    if(snap.exists()){
+      vehicles = snap.val();
+      render();
+    }
+  });
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+let statusFilter = null; // null | '대기' | '준비중' | '운행중'
+
+function toggleStatusFilter(s){
+  statusFilter = (statusFilter === s) ? null : s;
+  render();
+}
+
+function renderStats(){
+  const total = vehicles.length;
+  const idle = vehicles.filter(v=>v.status==='대기').length;
+  const prep = vehicles.filter(v=>v.status==='준비중').length;
+  const running = total - idle - prep;
+  const longTerm = vehicles.filter(v=>v.type==='장기');
+  const longCount = longTerm.length;
+  const longAmount = longTerm.reduce((sum,v)=> sum + (Number(v.amount)||0), 0);
+  const el = document.getElementById('statsRow');
+  el.innerHTML = `
+    <div class="stat ${statusFilter===null?'active':''}" onclick="toggleStatusFilter(null)"><b>${total}</b><span>총 차량</span></div>
+    <div class="stat amber ${statusFilter==='대기'?'active':''}" onclick="toggleStatusFilter('대기')"><b>${idle}</b><span>대기</span></div>
+    <div class="stat blue ${statusFilter==='준비중'?'active':''}" onclick="toggleStatusFilter('준비중')"><b>${prep}</b><span>준비중</span></div>
+    <div class="stat green ${statusFilter==='운행중'?'active':''}" onclick="toggleStatusFilter('운행중')"><b>${running}</b><span>운행중</span></div>
+    <div class="stat purple"><b>${longCount}대</b><span>장기</span></div>
+    <div class="stat purple"><b>${longAmount.toLocaleString()}</b><span>장기금액(만)</span></div>
+  `;
+}
+
+function render(){
+  renderStats();
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  let list = vehicles.filter(v=>{
+    if(q){
+      const hay = (v.plate+' '+v.note+' '+v.model+' '+v.extra).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    if(statusFilter){
+      const isRunning = v.status !== '대기' && v.status !== '준비중';
+      if(statusFilter==='운행중'){ if(!isRunning) return false; }
+      else if(v.status !== statusFilter) return false;
+    }
+    return true;
+  });
+
+  const main = document.getElementById('main');
+  if(list.length===0){
+    main.innerHTML = '<div class="empty">해당하는 차량이 없습니다</div>';
+    return;
+  }
+
+  const sortMode = document.getElementById('sortSelect').value;
+  if(sortMode==='plate'){
+    list = list.slice().sort((a,b)=>a.plate.localeCompare(b.plate,'ko'));
+  }else if(sortMode==='status'){
+    const priority = {'st-idle':1,'st-prep':2,'st-dispatch':3,'st-running':4};
+    list = list.slice().sort((a,b)=>priority[statusClass(a)]-priority[statusClass(b)]);
+  }
+
+  const groups = {};
+  list.forEach(v=>{
+    const b = v.branch || '장성';
+    if(!groups[b]) groups[b]=[];
+    groups[b].push(v);
+  });
+  const DISPLAY_ORDER = ['장성','장기'];
+  const order = [...DISPLAY_ORDER.filter(b=>groups[b]), ...Object.keys(groups).filter(b=>!DISPLAY_ORDER.includes(b))];
+
+  main.innerHTML = order.map(branch=>{
+    const items = groups[branch];
+    const cards = items.map(v=>{
+      const sc = statusClass(v);
+      const due = v.returnDate ? isReturnDue(v.returnDate) : false;
+      const soon = (!due && v.returnDate) ? isReturnSoon(v.returnDate) : false;
+      const cardExtraClass = due ? ' return-alert' : (soon ? ' return-soon-alert' : '');
+      return `
+        <div class="card ${sc}${cardExtraClass}" onclick="openModal('${v.plate}')">
+          <div class="cbody">
+            <div class="row1">
+              <span class="plate-tag plate">${v.plate}</span>
+              ${v.type?`<span class="type-badge tp-${v.type}">${v.type}</span>`:''}
+              <span class="badge ${sc}">${statusLabel(v)}</span>
+              ${due?`<span class="badge return-due">⏰ 반납일 도래</span>`:''}
+              ${soon?`<span class="badge return-soon">🔔 반납임박</span>`:''}
+            </div>
+            <div class="model">${v.cls} · ${v.model}${v.fuel?' · '+v.fuel:''}</div>
+            ${v.note?`<div class="note">${v.note}</div>`:''}
+            ${v.extra?`<div class="extra">${v.extra}</div>`:''}
+            ${v.returnDate?`<div class="extra${due?' return-due':(soon?' return-soon':'')}">반납일자: ${formatReturnDate(v.returnDate)}</div>`:''}
+          </div>
+          ${v.amount?`<div class="amount">${v.amount}만원${v.payDay?`<br>매월 ${v.payDay}일`:''}</div>`:''}
+        </div>`;
+    }).join('');
+    return `<div class="section-title"><span>${branch}</span><span>${items.length}대</span></div>${cards}`;
+  }).join('');
+}
+
+function openModal(plate){
+  window._editingPlate = plate;
+  const v = vehicles.find(x=>x.plate===plate);
+  document.getElementById('mPlate').textContent = v.plate;
+  document.getElementById('mModel').textContent = `${v.cls} · ${v.model}`;
+  document.getElementById('mType').value = v.type || '';
+  document.getElementById('mStartDate').value = v.startDate || '';
+  document.getElementById('mStatus').value = v.status || '';
+  document.getElementById('mNote').value = v.note || '';
+  document.getElementById('mExtra').value = v.extra || '';
+  document.getElementById('mExtra').disabled = true;
+  document.getElementById('mExtraToggle').textContent = '✎ 수정';
+  document.getElementById('mAmount').value = (v.amount===null || v.amount===undefined) ? '' : v.amount;
+  document.getElementById('mPayDay').value = (v.payDay===null || v.payDay===undefined) ? '' : v.payDay;
+  document.getElementById('mReturnDate').value = v.returnDate || '';
+  toggleAmountField('m', false);
+  document.getElementById('modalBg').classList.add('open');
+}
+function closeModal(){
+  document.getElementById('modalBg').classList.remove('open');
+  window._editingPlate = null;
+  cancelDeletePress();
+}
+function setStatus(s){ document.getElementById('mStatus').value = s; }
+function toggleExtraEdit(){
+  const input = document.getElementById('mExtra');
+  const btn = document.getElementById('mExtraToggle');
+  input.disabled = !input.disabled;
+  if(!input.disabled){
+    btn.textContent = '🔒 잠금';
+    input.focus();
+  }else{
+    btn.textContent = '✎ 수정';
+  }
+}
+function toggleAmountField(prefix, clear){
+  const type = document.getElementById(prefix+'Type').value;
+  const isLong = (type==='장기');
+  const isGeneral = (type==='일반');
+  document.getElementById(prefix+'AmountField').style.display = isLong ? '' : 'none';
+  document.getElementById(prefix+'PayDayField').style.display = isLong ? '' : 'none';
+  document.getElementById(prefix+'ReturnDateField').style.display = isGeneral ? '' : 'none';
+  if(!isLong && clear!==false){
+    document.getElementById(prefix+'Amount').value = '';
+    document.getElementById(prefix+'PayDay').value = '';
+  }
+  if(!isGeneral && clear!==false){
+    document.getElementById(prefix+'ReturnDate').value = '';
+  }
+}
+async function saveModal(){
+  const v = vehicles.find(x=>x.plate===window._editingPlate);
+  v.type = document.getElementById('mType').value;
+  v.startDate = document.getElementById('mStartDate').value || null;
+  v.status = document.getElementById('mStatus').value.trim();
+  v.note = document.getElementById('mNote').value.trim();
+  v.extra = document.getElementById('mExtra').value.trim();
+  const amtVal = document.getElementById('mAmount').value.trim();
+  v.amount = amtVal === '' ? null : Number(amtVal);
+  const payDayVal = document.getElementById('mPayDay').value.trim();
+  v.payDay = payDayVal === '' ? null : Number(payDayVal);
+  v.returnDate = document.getElementById('mReturnDate').value || null;
+  if(v.type==='장기'){
+    v.branch = '장기';
+  }else if(v.branch==='장기'){
+    v.branch = '장성';
+  }
+  closeModal();
+  render();
+  await persist();
+}
+
+async function deleteVehicle(){
+  const plate = window._editingPlate;
+  if(!plate) return;
+  vehicles = vehicles.filter(x=>x.plate!==plate);
+  closeModal();
+  render();
+  await persist();
+  showToast('차량이 삭제되었습니다');
+}
+function startDeletePress(){
+  const fill = document.getElementById('deleteFill');
+  if(!fill) return;
+  fill.style.transition = 'none';
+  fill.style.width = '0%';
+  void fill.offsetWidth;
+  fill.style.transition = 'width 1100ms linear';
+  fill.style.width = '100%';
+  clearTimeout(window._deletePressTimer);
+  window._deletePressTimer = setTimeout(deleteVehicle, 1100);
+}
+function cancelDeletePress(){
+  clearTimeout(window._deletePressTimer);
+  const fill = document.getElementById('deleteFill');
+  if(!fill) return;
+  fill.style.transition = 'width 150ms linear';
+  fill.style.width = '0%';
+}
+
+function openAddModal(){
+  ['aPlate','aBranch','aCls','aModel','aFuel','aExtra'].forEach(id=>{
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('aBranch').value = '장성';
+  document.getElementById('addModalBg').classList.add('open');
+}
+function closeAddModal(){
+  document.getElementById('addModalBg').classList.remove('open');
+}
+async function saveAddModal(){
+  const plate = document.getElementById('aPlate').value.trim();
+  if(!plate){
+    showToast('차량번호는 필수입니다');
+    return;
+  }
+  if(vehicles.some(v=>v.plate===plate)){
+    showToast('이미 등록된 차량번호입니다');
+    return;
+  }
+  const aBranch = document.getElementById('aBranch').value.trim() || '장성';
+  vehicles.push({
+    no:'+',
+    plate,
+    branch:aBranch,
+    cls:document.getElementById('aCls').value.trim(),
+    model:document.getElementById('aModel').value.trim(),
+    fuel:document.getElementById('aFuel').value.trim(),
+    type:'',
+    startDate:null,
+    status:'',
+    extra:document.getElementById('aExtra').value.trim(),
+    note:'',
+    amount:null,
+    payDay:null,
+    returnDate:null
+  });
+  closeAddModal();
+  render();
+  await persist();
+  showToast('차량이 추가되었습니다');
+}
+
+async function reload(manual){
+  await loadData();
+  render();
+  if(manual) showToast('최신 데이터로 새로고침 되었습니다');
+}
+
+function setDate(){
+  const d = new Date();
+  const days=['일','월','화','수','목','금','토'];
+  document.getElementById('dateLine').textContent =
+    `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 ${days[d.getDay()]}요일`;
+}
+
+(async function init(){
+  setDate();
+  await loadData();
+  render();
+  startRealtimeSync();
+})();
+</script>
+</body>
+</html>
