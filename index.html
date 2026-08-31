@@ -4,6 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>장성영업소 차량 현황판</title>
+<script>
+  // 카카오톡 등 인앱브라우저에서 열렸으면 외부 브라우저(크롬/사파리)로 자동 이탈
+  (function(){
+    var ua = navigator.userAgent || '';
+    var isKakao = /KAKAOTALK/i.test(ua);
+    var isNaver = /NAVER\(inapp/i.test(ua);
+    var isInApp = isKakao || isNaver;
+    if(!isInApp) return;
+
+    var currentUrl = location.href;
+
+    if(isKakao){
+      // 카카오 공식 외부브라우저 오픈 스킴
+      location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(currentUrl);
+      return;
+    }
+    if(isNaver){
+      // 네이버 인앱은 URL에 openExternalBrowser=1을 붙이면 외부로 열림
+      var sep = currentUrl.indexOf('?') > -1 ? '&' : '?';
+      location.href = currentUrl + sep + 'openExternalBrowser=1';
+      return;
+    }
+  })();
+</script>
 <script type="module">
   // ▼▼▼ Firebase 콘솔(console.firebase.google.com)에서 프로젝트 생성 후
   //     '프로젝트 설정 > 일반 > 내 앱 > SDK 설정 및 구성'에서 이 값들을 그대로 복붙하세요.
@@ -224,8 +248,8 @@
       <div class="date" id="dateLine"></div>
     </div>
     <div class="header-actions">
-      <a class="link-btn telegram" href="https://t.me/+zgPlZTwlkk8wYWVl" target="_blank" rel="noopener">📱 텔레그램방</a>
-      <a class="link-btn kakao" href="intent://launch#Intent;scheme=kakaotalk;package=com.kakao.talk;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.kakao.talk;end">💬 카카오톡</a>
+      <a class="link-btn telegram" href="intent://t.me/+zgPlZTwlkk8wYWVl#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Ft.me%2F%2BzgPlZTwlkk8wYWVl;end">📱 텔레그램방</a>
+      <a class="link-btn kakao" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.kakao.talk;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.kakao.talk;end">💬 카카오톡</a>
       <a class="link-btn app" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.Rentcar.heaven819.gcmpush;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.Rentcar.heaven819.gcmpush;end">🚗 팡팡렌트카</a>
       <button class="refresh-btn" onclick="reload(true)">↻ 새로고침</button>
     </div>
