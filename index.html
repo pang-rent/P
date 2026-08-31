@@ -56,13 +56,22 @@
     padding:14px 14px 8px;
     border-bottom:1px solid var(--line);
   }
-  header .title-row{display:flex;justify-content:space-between;align-items:baseline;}
+  header .title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
   header h1{font-size:17px;margin:0;font-weight:700;}
   header .date{font-size:11px;color:var(--sub);}
   .refresh-btn{
     background:var(--panel2);border:1px solid var(--line);color:var(--amber);
     border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
   }
+  .header-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+  .link-btn{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
+    text-decoration:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;
+  }
+  .link-btn.telegram{color:var(--blue);}
+  .link-btn.app{color:var(--green);}
+  .link-btn.kakao{color:#FEE500;}
 
   .stats{display:flex;gap:6px;margin-top:10px;overflow-x:auto;padding-bottom:2px;}
   .stat{
@@ -214,7 +223,12 @@
       <h1>🚗 장성영업소 차량 현황판</h1>
       <div class="date" id="dateLine"></div>
     </div>
-    <button class="refresh-btn" onclick="reload(true)">↻ 새로고침</button>
+    <div class="header-actions">
+      <a class="link-btn telegram" href="https://t.me/+zgPlZTwlkk8wYWVl" target="_blank" rel="noopener">📱 텔레그램방</a>
+      <a class="link-btn kakao" href="kakaotalk://launch">💬 카카오톡</a>
+      <a class="link-btn app" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.Rentcar.heaven819.gcmpush;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.Rentcar.heaven819.gcmpush;end">🚗 팡팡렌트카</a>
+      <button class="refresh-btn" onclick="reload(true)">↻ 새로고침</button>
+    </div>
   </div>
   <div class="stats" id="statsRow"></div>
   <div class="search-row">
@@ -222,7 +236,7 @@
     <select id="sortSelect" onchange="render()" style="background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:9px 10px;font-size:13px;">
       <option value="default">기본순</option>
       <option value="plate">차량번호순</option>
-      <option value="status">상태순</option>
+      <option value="status" selected>상태순</option>
     </select>
   </div>
 </header>
@@ -458,17 +472,18 @@ function renderStats(){
   const total = vehicles.length;
   const idle = vehicles.filter(v=>v.status==='대기').length;
   const prep = vehicles.filter(v=>v.status==='준비중').length;
-  const running = total - idle - prep;
   const longTerm = vehicles.filter(v=>v.type==='장기');
   const longCount = longTerm.length;
   const longAmount = longTerm.reduce((sum,v)=> sum + (Number(v.amount)||0), 0);
+  // ▼ 수정: 운행중 카운트에서 장기렌트 차량은 제외 (장기는 별도 통계로만 표시)
+  const running = total - idle - prep - longCount;
   const el = document.getElementById('statsRow');
   el.innerHTML = `
     <div class="stat ${statusFilter===null?'active':''}" onclick="toggleStatusFilter(null)"><b>${total}</b><span>총 차량</span></div>
     <div class="stat amber ${statusFilter==='대기'?'active':''}" onclick="toggleStatusFilter('대기')"><b>${idle}</b><span>대기</span></div>
     <div class="stat blue ${statusFilter==='준비중'?'active':''}" onclick="toggleStatusFilter('준비중')"><b>${prep}</b><span>준비중</span></div>
     <div class="stat green ${statusFilter==='운행중'?'active':''}" onclick="toggleStatusFilter('운행중')"><b>${running}</b><span>운행중</span></div>
-    <div class="stat purple"><b>${longCount}대</b><span>장기</span></div>
+    <div class="stat purple ${statusFilter==='장기'?'active':''}" onclick="toggleStatusFilter('장기')"><b>${longCount}대</b><span>장기</span></div>
     <div class="stat purple"><b>${longAmount.toLocaleString()}</b><span>장기금액(만)</span></div>
   `;
 }
@@ -482,9 +497,12 @@ function render(){
       if(!hay.includes(q)) return false;
     }
     if(statusFilter){
-      const isRunning = v.status !== '대기' && v.status !== '준비중';
-      if(statusFilter==='운행중'){ if(!isRunning) return false; }
-      else if(v.status !== statusFilter) return false;
+      if(statusFilter==='장기'){ if(v.type !== '장기') return false; }
+      else{
+        const isRunning = v.status !== '대기' && v.status !== '준비중' && v.type !== '장기';
+        if(statusFilter==='운행중'){ if(!isRunning) return false; }
+        else if(v.status !== statusFilter) return false;
+      }
     }
     return true;
   });
