@@ -1154,8 +1154,49 @@ function toggleAmountField(prefix, clear){
     document.getElementById(prefix+'ReturnDate').value = '';
   }
 }
+function scheduleKeyForPlate(plate){
+  return 'auto-return-' + (plate||'').toString().replace(/[.#$\[\]\/\s]/g,'_');
+}
+
+async function syncReturnSchedule(plate, oldDate, newDate){
+  const { ref, set, update, db } = window._fb;
+  const key = scheduleKeyForPlate(plate);
+  if(newDate){
+    if(newDate !== oldDate){
+      // 새 반납일이거나 날짜가 바뀐 경우: 완료 상태를 초기화하고 등록/갱신
+      await set(ref(db, 'schedules/'+key), {
+        title: `${plate} 차량 반납일`,
+        date: newDate,
+        repeat: false,
+        memo: '',
+        auto: true,
+        done: false
+      });
+    }
+    // 날짜가 그대로면 완료 상태 등 기존 값을 건드리지 않음
+  } else if(oldDate){
+    // 반납일을 지웠다 = 차량이 회수됨 → 삭제 대신 완료 처리해서 기록을 남김
+    await update(ref(db, 'schedules/'+key), { done: true });
+  }
+}
+
+async function syncAllReturnSchedules(){
+  for(const v of vehicles){
+    const key = scheduleKeyForPlate(v.plate);
+    const existing = schedules[key];
+    if(v.returnDate){
+      if(!existing || existing.date !== v.returnDate){
+        await syncReturnSchedule(v.plate, null, v.returnDate);
+      }
+    } else if(existing && !existing.done){
+      await syncReturnSchedule(v.plate, existing.date, null);
+    }
+  }
+}
+
 async function saveModal(){
   const v = vehicles.find(x=>x.plate===window._editingPlate);
+  const oldReturnDate = v.returnDate || null;
   v.type = document.getElementById('mType').value;
   v.startDate = document.getElementById('mStartDate').value || null;
   v.status = document.getElementById('mStatus').value.trim();
@@ -1176,6 +1217,7 @@ async function saveModal(){
   closeModal();
   render();
   await persist();
+  await syncReturnSchedule(v.plate, oldReturnDate, v.returnDate);
 }
 
 async function deleteVehicle(){
@@ -1185,6 +1227,8 @@ async function deleteVehicle(){
   closeModal();
   render();
   await persist();
+  const { ref, remove, db } = window._fb;
+  await remove(ref(db, 'schedules/'+scheduleKeyForPlate(plate)));
   showToast('차량이 삭제되었습니다');
 }
 function startDeletePress(){
@@ -1273,6 +1317,7 @@ function setDate(){
   await loadSchedules();
   renderSchedBanner();
   startScheduleSync();
+  await syncAllReturnSchedules();
 })();
 </script>
 </body>
