@@ -263,6 +263,14 @@
   .sched-list-row .t{ font-size:13px; font-weight:600; margin-top:2px; }
   .sched-list-row .m{ font-size:12px; color:var(--sub); margin-top:2px; }
   .sched-list-row .del{ background:none; border:none; color:var(--red); font-size:12px; padding:2px 4px; flex-shrink:0; }
+  .sched-list-row.done{ opacity:.5; }
+  .sched-list-row.done .t{ text-decoration:line-through; }
+  .sched-list-row .actions{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .sched-list-row .done-btn{
+    background:none; border:1px solid var(--line); color:var(--sub); font-size:11px;
+    padding:3px 8px; border-radius:20px; white-space:nowrap;
+  }
+  .sched-list-row .done-btn.on{ background:var(--green,#34d399); border-color:transparent; color:#0a2e22; }
   .sched-empty{ text-align:center; color:var(--sub); font-size:12.5px; padding:20px 0; }
   .sched-repeat-tag{ font-size:10px; color:var(--sub); background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:1px 6px; margin-left:6px; }
 
@@ -279,8 +287,8 @@
   }
   .cal-dow{ text-align:center; font-size:10.5px; color:var(--sub); padding:4px 0; }
   .cal-cell{
-    position:relative; aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    border-radius:8px; font-size:12.5px; color:var(--text); cursor:pointer; background:var(--panel2);
+    position:relative; height:32px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    border-radius:8px; font-size:12px; color:var(--text); cursor:pointer; background:var(--panel2);
     border:1px solid transparent;
   }
   .cal-cell.empty{ background:none; cursor:default; }
@@ -409,30 +417,7 @@
 <div class="modal-bg" id="schedModalBg">
   <div class="modal">
     <h3>📅 일정 관리</h3>
-    <div class="sub">오늘/내일 일정은 상단에 배너로 표시되고, 내일 일정은 저녁 6시 이후부터 미리 보여드려요.</div>
-
-    <div class="field">
-      <label>제목</label>
-      <input id="sTitle" placeholder="예: 차량 정기점검, 보험 갱신">
-    </div>
-    <div class="field">
-      <label>날짜</label>
-      <input id="sDate" type="date">
-    </div>
-    <div class="field">
-      <label style="display:flex;align-items:center;gap:7px;">
-        <input type="checkbox" id="sRepeat" style="width:auto;">
-        <span style="font-size:13px;color:var(--text);">매월 같은 날짜에 반복</span>
-      </label>
-    </div>
-    <div class="field">
-      <label>메모 (선택)</label>
-      <input id="sMemo" placeholder="추가로 남겨둘 내용">
-    </div>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeSchedModal()">닫기</button>
-      <button class="btn-save" onclick="addSchedule()">일정 추가</button>
-    </div>
+    <div class="sub">날짜를 눌러 그날 일정을 보세요. 오늘/내일 일정은 상단 배너에도 표시돼요.</div>
 
     <div class="cal-head">
       <button onclick="calShiftMonth(-1)">‹</button>
@@ -450,6 +435,38 @@
       <button onclick="calShowAll()">전체 일정 보기</button>
     </div>
     <div id="schedList"></div>
+
+    <button class="btn-cancel" style="width:100%;margin-top:14px;" onclick="toggleAddForm()">
+      <span id="addFormToggleLabel">+ 새 일정 추가</span>
+    </button>
+
+    <div id="addFormFields" style="display:none;margin-top:12px;">
+      <div class="field">
+        <label>제목</label>
+        <input id="sTitle" placeholder="예: 차량 정기점검, 보험 갱신">
+      </div>
+      <div class="field">
+        <label>날짜</label>
+        <input id="sDate" type="date">
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:7px;">
+          <input type="checkbox" id="sRepeat" style="width:auto;">
+          <span style="font-size:13px;color:var(--text);">매월 같은 날짜에 반복</span>
+        </label>
+      </div>
+      <div class="field">
+        <label>메모 (선택)</label>
+        <input id="sMemo" placeholder="추가로 남겨둘 내용">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-save" style="flex:1;" onclick="addSchedule()">일정 추가</button>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn-cancel" style="width:100%;" onclick="closeSchedModal()">닫기</button>
+    </div>
   </div>
 </div>
 
@@ -647,6 +664,23 @@ function startScheduleSync(){
   });
 }
 
+function isScheduleDone(sched, dateStr){
+  if(sched.repeat) return !!(sched.completedDates && sched.completedDates[dateStr]);
+  return !!sched.done;
+}
+
+async function toggleScheduleDone(key, dateStr){
+  const sched = schedules[key];
+  if(!sched) return;
+  const { ref, set, db } = window._fb;
+  if(sched.repeat){
+    const cur = !!(sched.completedDates && sched.completedDates[dateStr]);
+    await set(ref(db, `schedules/${key}/completedDates/${dateStr}`), cur ? null : true);
+  }else{
+    await set(ref(db, `schedules/${key}/done`), !sched.done);
+  }
+}
+
 function renderSchedBanner(){
   const el = document.getElementById('schedBanner');
   const list = Object.values(schedules || {});
@@ -654,9 +688,9 @@ function renderSchedBanner(){
   const tomorrow = tomorrowStr();
   const hour = new Date().getHours();
 
-  const todayItems = list.filter(s => matchesDate(s, today));
+  const todayItems = list.filter(s => matchesDate(s, today) && !isScheduleDone(s, today));
   const showTomorrow = hour >= 18; // 저녁 6시 이후부터 내일 일정 미리 표시
-  const tomorrowItems = showTomorrow ? list.filter(s => matchesDate(s, tomorrow)) : [];
+  const tomorrowItems = showTomorrow ? list.filter(s => matchesDate(s, tomorrow) && !isScheduleDone(s, tomorrow)) : [];
 
   let html = '';
   todayItems.forEach(s=>{
@@ -672,11 +706,21 @@ function escapeHtml(s){
   return (s||'').toString().replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 }
 
+function toggleAddForm(){
+  const el = document.getElementById('addFormFields');
+  const label = document.getElementById('addFormToggleLabel');
+  const willOpen = el.style.display === 'none';
+  el.style.display = willOpen ? 'block' : 'none';
+  label.textContent = willOpen ? '- 새 일정 추가 닫기' : '+ 새 일정 추가';
+}
+
 function openSchedModal(){
   document.getElementById('sTitle').value = '';
   document.getElementById('sDate').value = todayStr();
   document.getElementById('sRepeat').checked = false;
   document.getElementById('sMemo').value = '';
+  document.getElementById('addFormFields').style.display = 'none';
+  document.getElementById('addFormToggleLabel').textContent = '+ 새 일정 추가';
   const now = new Date();
   calYear = now.getFullYear();
   calMonth = now.getMonth();
@@ -796,14 +840,22 @@ function renderSchedList(){
   }
   el.innerHTML = entries.map(([key, s])=>{
     const [y,m,d] = (s.date||'').split('-');
+    const effDate = calSelectedDate || (s.repeat ? null : s.date); // repeat 일정은 날짜 선택 시에만 완료처리 가능
+    const done = effDate ? isScheduleDone(s, effDate) : false;
+    const doneBtn = effDate
+      ? `<button class="done-btn${done?' on':''}" onclick="toggleScheduleDone('${key}','${effDate}')">${done?'✓ 완료됨':'완료'}</button>`
+      : `<button class="done-btn" disabled style="opacity:.4;" title="날짜를 선택하면 완료 처리할 수 있어요">완료</button>`;
     return `
-      <div class="sched-list-row">
+      <div class="sched-list-row${done?' done':''}">
         <div>
           <div class="d">${m}월 ${d}일${s.repeat?'<span class="sched-repeat-tag">매월 반복</span>':''}</div>
           <div class="t">${escapeHtml(s.title)}</div>
           ${s.memo?`<div class="m">${escapeHtml(s.memo)}</div>`:''}
         </div>
-        <button class="del" onclick="deleteSchedule('${key}')">삭제</button>
+        <div class="actions">
+          ${doneBtn}
+          <button class="del" onclick="deleteSchedule('${key}')">삭제</button>
+        </div>
       </div>`;
   }).join('');
 }
