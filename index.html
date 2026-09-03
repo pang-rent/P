@@ -188,10 +188,10 @@
     0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,0);}
     50%{box-shadow:0 0 0 3px rgba(248,113,113,.35);}
   }
+  .amount{font-size:11px;color:var(--sub);white-space:nowrap;}
   .return-soon{color:var(--amber);font-weight:700;}
   .badge.return-soon{background:rgba(245,166,35,.18);}
   .card.return-soon-alert{border-left-color:var(--amber);}
-  .amount{font-size:11px;color:var(--sub);white-space:nowrap;}
   .empty{text-align:center;color:var(--sub);font-size:13px;padding:30px 0;}
 
   .modal-bg{
@@ -602,6 +602,21 @@ async function loadData(){
     vehicles = SEED.slice();
     showToast('연결 실패 - Firebase 설정을 확인하세요');
   }
+  autoFlagReturnDue();
+}
+
+function autoFlagReturnDue(){
+  let changed = false;
+  vehicles.forEach(v=>{
+    if(v.returnDate && isReturnDue(v.returnDate)){
+      const note = v.note || '';
+      if(!note.includes('반납 임박')){
+        v.note = note ? `${note} / 반납 임박` : '반납 임박';
+        changed = true;
+      }
+    }
+  });
+  if(changed) persist();
 }
 
 async function persist(){
@@ -621,6 +636,7 @@ function startRealtimeSync(){
     if(_suppressNextRemote){ _suppressNextRemote = false; return; }
     if(snap.exists()){
       vehicles = snap.val();
+      autoFlagReturnDue();
       render();
     }
   });
@@ -987,7 +1003,13 @@ function render(){
   const order = [...DISPLAY_ORDER.filter(b=>groups[b]), ...Object.keys(groups).filter(b=>!DISPLAY_ORDER.includes(b))];
 
   main.innerHTML = order.map(branch=>{
-    const items = groups[branch];
+    let items = groups[branch].slice();
+    items.sort((a, b) => {
+      const aDue = a.returnDate ? isReturnDue(a.returnDate) : false;
+      const bDue = b.returnDate ? isReturnDue(b.returnDate) : false;
+      if (aDue === bDue) return 0;
+      return aDue ? -1 : 1;
+    });
     const cards = items.map(v=>{
       const sc = statusClass(v);
       const due = v.returnDate ? isReturnDue(v.returnDate) : false;
