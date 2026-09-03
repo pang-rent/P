@@ -85,13 +85,17 @@
   header .date{font-size:11px;color:var(--sub);}
   .refresh-btn{
     background:var(--panel2);border:1px solid var(--line);color:var(--amber);
-    border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
+    border-radius:8px;padding:8px 6px;font-size:12px;font-weight:600;
+    width:100%;text-align:center;
   }
-  .header-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+  .header-actions{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:6px;margin-top:10px;
+  }
   .link-btn{
     background:var(--panel2);border:1px solid var(--line);color:var(--text);
-    border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
-    text-decoration:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;
+    border-radius:8px;padding:8px 6px;font-size:12px;font-weight:600;
+    text-decoration:none;display:flex;align-items:center;justify-content:center;gap:4px;
+    white-space:nowrap;width:100%;
   }
   .link-btn.telegram{color:var(--blue);}
   .link-btn.app{color:var(--green);}
@@ -198,7 +202,7 @@
   .modal{
     background:var(--panel);width:100%;max-width:480px;border-radius:16px 16px 0 0;
     padding:18px 16px 24px;border:1px solid var(--line);border-bottom:none;
-    max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    max-height:94vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
   }
   .modal h3{margin:0 0 2px;font-size:16px;}
   .modal .sub{color:var(--sub);font-size:12px;margin-bottom:14px;}
@@ -265,12 +269,22 @@
   .sched-list-row .del{ background:none; border:none; color:var(--red); font-size:12px; padding:2px 4px; flex-shrink:0; }
   .sched-list-row.done{ opacity:.5; }
   .sched-list-row.done .t{ text-decoration:line-through; }
-  .sched-list-row .actions{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
-  .sched-list-row .done-btn{
-    background:none; border:1px solid var(--line); color:var(--sub); font-size:11px;
-    padding:3px 8px; border-radius:20px; white-space:nowrap;
+  .sched-list-row .actions{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  .done-switch{ display:flex; align-items:center; gap:6px; }
+  .done-switch .lbl{ font-size:10.5px; color:var(--sub); }
+  .done-switch.on .lbl{ color:var(--green,#34d399); font-weight:700; }
+  .toggle{ position:relative; display:inline-block; width:34px; height:20px; flex-shrink:0; cursor:pointer; }
+  .toggle input{ opacity:0; width:0; height:0; position:absolute; }
+  .toggle .slider{
+    position:absolute; inset:0; background:var(--line); border-radius:20px; transition:background .15s;
   }
-  .sched-list-row .done-btn.on{ background:var(--green,#34d399); border-color:transparent; color:#0a2e22; }
+  .toggle .slider::before{
+    content:""; position:absolute; height:14px; width:14px; left:3px; top:3px;
+    background:var(--sub); border-radius:50%; transition:transform .15s, background .15s;
+  }
+  .toggle input:checked + .slider{ background:rgba(52,211,153,.35); }
+  .toggle input:checked + .slider::before{ transform:translateX(14px); background:var(--green,#34d399); }
+  .toggle input:disabled + .slider{ opacity:.35; cursor:default; }
   .sched-empty{ text-align:center; color:var(--sub); font-size:12.5px; padding:20px 0; }
   .sched-repeat-tag{ font-size:10px; color:var(--sub); background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:1px 6px; margin-left:6px; }
 
@@ -315,13 +329,13 @@
       <h1>🚗 장성영업소 차량 현황판</h1>
       <div class="date" id="dateLine"></div>
     </div>
-    <div class="header-actions">
-      <a class="link-btn telegram" href="intent://t.me/+zgPlZTwlkk8wYWVl#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Ft.me%2F%2BzgPlZTwlkk8wYWVl;end">📱 텔레그램방</a>
-      <a class="link-btn kakao" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.kakao.talk;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.kakao.talk;end">💬 카카오톡</a>
-      <a class="link-btn app" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.Rentcar.heaven819.gcmpush;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.Rentcar.heaven819.gcmpush;end">🚗 팡팡렌트카</a>
-      <button class="link-btn" style="color:var(--purple);border:none;background:var(--panel2);" onclick="openSchedModal()">📅 일정</button>
-      <button class="refresh-btn" onclick="reload(true)">↻ 새로고침</button>
-    </div>
+  </div>
+  <div class="header-actions">
+    <a class="link-btn telegram" href="intent://t.me/+zgPlZTwlkk8wYWVl#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Ft.me%2F%2BzgPlZTwlkk8wYWVl;end">📱 텔레그램방</a>
+    <a class="link-btn kakao" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.kakao.talk;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.kakao.talk;end">💬 카카오톡</a>
+    <a class="link-btn app" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.Rentcar.heaven819.gcmpush;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.Rentcar.heaven819.gcmpush;end">🚗 팡팡렌트카</a>
+    <button class="link-btn" style="color:var(--purple);border:none;background:var(--panel2);" onclick="openSchedModal()">📅 일정</button>
+    <button class="refresh-btn" onclick="reload(true)">↻ 새로고침</button>
   </div>
   <div class="stats" id="statsRow"></div>
   <div class="sched-banner" id="schedBanner"></div>
@@ -843,8 +857,8 @@ function renderSchedList(){
     const effDate = calSelectedDate || (s.repeat ? null : s.date); // repeat 일정은 날짜 선택 시에만 완료처리 가능
     const done = effDate ? isScheduleDone(s, effDate) : false;
     const doneBtn = effDate
-      ? `<button class="done-btn${done?' on':''}" onclick="toggleScheduleDone('${key}','${effDate}')">${done?'✓ 완료됨':'완료'}</button>`
-      : `<button class="done-btn" disabled style="opacity:.4;" title="날짜를 선택하면 완료 처리할 수 있어요">완료</button>`;
+      ? `<div class="done-switch${done?' on':''}"><span class="lbl">${done?'완료':'완료'}</span><label class="toggle"><input type="checkbox" ${done?'checked':''} onchange="toggleScheduleDone('${key}','${effDate}')"><span class="slider"></span></label></div>`
+      : `<div class="done-switch"><span class="lbl">완료</span><label class="toggle" title="날짜를 선택하면 완료 처리할 수 있어요"><input type="checkbox" disabled><span class="slider"></span></label></div>`;
     return `
       <div class="sched-list-row${done?' done':''}">
         <div>
