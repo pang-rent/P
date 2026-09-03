@@ -80,7 +80,7 @@
     padding:14px 14px 8px;
     border-bottom:1px solid var(--line);
   }
-  header .title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  header .title-row{display:flex;justify-content:center;align-items:flex-start;gap:8px;text-align:center;}
   header h1{font-size:17px;margin:0;font-weight:700;}
   header .date{font-size:11px;color:var(--sub);}
   .refresh-btn{
@@ -201,7 +201,7 @@
   .modal-bg.open{display:flex;}
   .modal{
     background:var(--panel);width:100%;max-width:480px;border-radius:16px 16px 0 0;
-    padding:18px 16px 24px;border:1px solid var(--line);border-bottom:none;
+    padding:18px 16px calc(56px + env(safe-area-inset-bottom));border:1px solid var(--line);border-bottom:none;
     max-height:94vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
   }
   .modal h3{margin:0 0 2px;font-size:16px;}
@@ -335,6 +335,7 @@
     <a class="link-btn kakao" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.kakao.talk;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.kakao.talk;end">💬 카카오톡</a>
     <a class="link-btn app" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.Rentcar.heaven819.gcmpush;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.Rentcar.heaven819.gcmpush;end">🚗 팡팡렌트카</a>
     <button class="link-btn" style="color:var(--purple);border:none;background:var(--panel2);" onclick="openSchedModal()">📅 일정</button>
+    <a class="link-btn" style="color:var(--amber);" href="payment.html">💳 결제일 알림</a>
     <button class="refresh-btn" onclick="reload(true)">↻ 새로고침</button>
   </div>
   <div class="stats" id="statsRow"></div>
@@ -450,7 +451,7 @@
     </div>
     <div id="schedList"></div>
 
-    <button class="btn-cancel" style="width:100%;margin-top:14px;" onclick="toggleAddForm()">
+    <button class="btn-cancel" style="width:100%;margin-top:14px;padding:16px;font-size:16px;font-weight:700;border-radius:12px;" onclick="toggleAddForm()">
       <span id="addFormToggleLabel">+ 새 일정 추가</span>
     </button>
 
@@ -474,12 +475,12 @@
         <input id="sMemo" placeholder="추가로 남겨둘 내용">
       </div>
       <div class="modal-actions">
-        <button class="btn-save" style="flex:1;" onclick="addSchedule()">일정 추가</button>
+        <button class="btn-save" style="flex:1;" onclick="addSchedule()"><span id="addFormSaveLabel">일정 추가</span></button>
       </div>
     </div>
 
-    <div class="modal-actions" style="margin-top:14px;">
-      <button class="btn-cancel" style="width:100%;" onclick="closeSchedModal()">닫기</button>
+    <div class="modal-actions" style="margin-top:14px;position:sticky;bottom:0;background:var(--panel);padding-top:8px;padding-bottom:4px;">
+      <button class="btn-cancel" style="width:100%;padding:15px;font-size:15px;font-weight:700;" onclick="closeSchedModal()">닫기</button>
     </div>
   </div>
 </div>
@@ -725,16 +726,39 @@ function toggleAddForm(){
   const label = document.getElementById('addFormToggleLabel');
   const willOpen = el.style.display === 'none';
   el.style.display = willOpen ? 'block' : 'none';
+  if(!willOpen) exitEditMode();
   label.textContent = willOpen ? '- 새 일정 추가 닫기' : '+ 새 일정 추가';
 }
 
-function openSchedModal(){
+let editingScheduleKey = null;
+
+function exitEditMode(){
+  editingScheduleKey = null;
   document.getElementById('sTitle').value = '';
   document.getElementById('sDate').value = todayStr();
   document.getElementById('sRepeat').checked = false;
   document.getElementById('sMemo').value = '';
-  document.getElementById('addFormFields').style.display = 'none';
+  document.getElementById('addFormSaveLabel').textContent = '일정 추가';
   document.getElementById('addFormToggleLabel').textContent = '+ 새 일정 추가';
+}
+
+function editSchedule(key){
+  const s = schedules[key];
+  if(!s) return;
+  editingScheduleKey = key;
+  document.getElementById('sTitle').value = s.title || '';
+  document.getElementById('sDate').value = s.date || todayStr();
+  document.getElementById('sRepeat').checked = !!s.repeat;
+  document.getElementById('sMemo').value = s.memo || '';
+  document.getElementById('addFormSaveLabel').textContent = '수정 저장';
+  document.getElementById('addFormToggleLabel').textContent = '- 새 일정 추가 닫기';
+  document.getElementById('addFormFields').style.display = 'block';
+  document.getElementById('addFormFields').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function openSchedModal(){
+  exitEditMode();
+  document.getElementById('addFormFields').style.display = 'none';
   const now = new Date();
   calYear = now.getFullYear();
   calMonth = now.getMonth();
@@ -751,23 +775,38 @@ async function addSchedule(){
   const title = document.getElementById('sTitle').value.trim();
   const date = document.getElementById('sDate').value;
   if(!title || !date){ showToast('제목과 날짜를 입력해주세요'); return; }
-  const { ref, push, db } = window._fb;
-  await push(ref(db, 'schedules'), {
+  const { ref, push, set, db } = window._fb;
+  const payload = {
     title, date,
     repeat: document.getElementById('sRepeat').checked,
     memo: document.getElementById('sMemo').value.trim()
-  });
-  document.getElementById('sTitle').value = '';
-  document.getElementById('sMemo').value = '';
+  };
+
+  if(editingScheduleKey){
+    // 기존 일정 수정 - 완료 기록은 유지
+    const prev = schedules[editingScheduleKey] || {};
+    if(prev.done !== undefined) payload.done = prev.done;
+    if(prev.completedDates !== undefined) payload.completedDates = prev.completedDates;
+    await set(ref(db, 'schedules/'+editingScheduleKey), payload);
+    showToast('일정이 수정되었습니다');
+  }else{
+    await push(ref(db, 'schedules'), payload);
+    showToast('일정이 추가되었습니다');
+  }
+
+  exitEditMode();
   calSelectedDate = date;
   const [ny, nm] = date.split('-').map(Number);
   calYear = ny; calMonth = nm - 1;
   renderCalendar();
   renderSchedList();
-  showToast('일정이 추가되었습니다');
 }
 
 async function deleteSchedule(key){
+  const s = schedules[key];
+  const label = s && s.title ? `"${s.title}" 일정을` : '이 일정을';
+  if(!confirm(`${label} 삭제할까요? 삭제하면 되돌릴 수 없습니다.`)) return;
+  if(editingScheduleKey === key) exitEditMode();
   const { ref, remove, db } = window._fb;
   await remove(ref(db, 'schedules/'+key));
   showToast('일정이 삭제되었습니다');
@@ -868,7 +907,10 @@ function renderSchedList(){
         </div>
         <div class="actions">
           ${doneBtn}
-          <button class="del" onclick="deleteSchedule('${key}')">삭제</button>
+          <div style="display:flex;gap:8px;">
+            <button class="del" style="color:var(--blue);" onclick="editSchedule('${key}')">수정</button>
+            <button class="del" onclick="deleteSchedule('${key}')">삭제</button>
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -975,7 +1017,7 @@ function render(){
           ${v.amount?`<div class="amount">${v.customerName?`${v.customerName}<br>`:''}${v.amount}만원${v.payDay?`<br>매월 ${v.payDay}일`:''}</div>`:''}
         </div>`;
     }).join('');
-    return `<div class="section-title"><span>${branch}</span><span style="display:flex;align-items:center;gap:8px;">${items.length}대${branch==='장기' ? `<a href="payment.html" style="color:var(--amber);text-decoration:none;font-weight:700;background:rgba(245,166,35,.15);padding:3px 9px;border-radius:20px;font-size:11px;">💳 결제일 알림</a>` : ''}</span></div>${cards}`;
+    return `<div class="section-title"><span>${branch}</span><span>${items.length}대</span></div>${cards}`;
   }).join('');
 }
 
