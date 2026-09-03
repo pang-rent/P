@@ -42,10 +42,10 @@
     appId: "1:390123603041:web:35bbc4059db12d586e5620"
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-  import { getDatabase, ref, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+  import { getDatabase, ref, get, set, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
-  window._fb = { ref, get, set, onValue, db };
+  window._fb = { ref, get, set, onValue, push, remove, db };
   window._fbReady = true;
   window.dispatchEvent(new Event('fb-ready'));
 </script>
@@ -237,6 +237,66 @@
     background:var(--amber);color:#1a1a1a;font-size:26px;font-weight:700;
     box-shadow:0 6px 16px rgba(0,0,0,.4);line-height:1;
   }
+
+  .sched-banner{
+    display:flex; flex-direction:column; gap:6px; margin-top:10px;
+  }
+  .sched-item{
+    display:flex; align-items:center; gap:8px; border-radius:9px; padding:8px 12px;
+    font-size:12.5px; line-height:1.4;
+  }
+  .sched-item.today{ background:rgba(245,166,35,.14); border:1px solid var(--amber); color:var(--amber); }
+  .sched-item.tomorrow{ background:rgba(91,157,255,.12); border:1px solid var(--blue); color:var(--blue); }
+  .sched-item .sched-tag{
+    font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; flex-shrink:0;
+  }
+  .sched-item.today .sched-tag{ background:var(--amber); color:#241c0a; }
+  .sched-item.tomorrow .sched-tag{ background:var(--blue); color:#0a1a33; }
+  .sched-item .sched-title{ color:var(--text); font-weight:600; flex:1; }
+
+  .sched-list-row{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+    background:var(--panel2); border:1px solid var(--line); border-radius:9px;
+    padding:10px 12px; margin-bottom:8px;
+  }
+  .sched-list-row .d{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; color:var(--amber); white-space:nowrap; }
+  .sched-list-row .t{ font-size:13px; font-weight:600; margin-top:2px; }
+  .sched-list-row .m{ font-size:12px; color:var(--sub); margin-top:2px; }
+  .sched-list-row .del{ background:none; border:none; color:var(--red); font-size:12px; padding:2px 4px; flex-shrink:0; }
+  .sched-empty{ text-align:center; color:var(--sub); font-size:12.5px; padding:20px 0; }
+  .sched-repeat-tag{ font-size:10px; color:var(--sub); background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:1px 6px; margin-left:6px; }
+
+  .cal-head{
+    display:flex; align-items:center; justify-content:space-between; margin:14px 0 8px;
+  }
+  .cal-head button{
+    background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:7px;
+    width:30px; height:30px; font-size:15px; cursor:pointer;
+  }
+  .cal-head .cal-title{ font-size:14px; font-weight:700; }
+  .cal-grid{
+    display:grid; grid-template-columns:repeat(7,1fr); gap:3px; margin-bottom:6px;
+  }
+  .cal-dow{ text-align:center; font-size:10.5px; color:var(--sub); padding:4px 0; }
+  .cal-cell{
+    position:relative; aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    border-radius:8px; font-size:12.5px; color:var(--text); cursor:pointer; background:var(--panel2);
+    border:1px solid transparent;
+  }
+  .cal-cell.empty{ background:none; cursor:default; }
+  .cal-cell.today{ border-color:var(--amber); color:var(--amber); font-weight:700; }
+  .cal-cell.selected{ background:var(--amber); color:#241c0a; font-weight:700; }
+  .cal-cell .dot{
+    width:4px; height:4px; border-radius:50%; background:var(--blue); margin-top:2px;
+  }
+  .cal-cell.selected .dot{ background:#241c0a; }
+  .cal-toolbar{
+    display:flex; align-items:center; justify-content:space-between; margin:16px 0 8px;
+  }
+  .cal-toolbar .sub{ margin:0; }
+  .cal-toolbar button{
+    background:none; border:none; color:var(--blue); font-size:12px; cursor:pointer; padding:2px 4px;
+  }
 </style>
 </head>
 <body>
@@ -251,10 +311,12 @@
       <a class="link-btn telegram" href="intent://t.me/+zgPlZTwlkk8wYWVl#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Ft.me%2F%2BzgPlZTwlkk8wYWVl;end">📱 텔레그램방</a>
       <a class="link-btn kakao" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.kakao.talk;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.kakao.talk;end">💬 카카오톡</a>
       <a class="link-btn app" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.Rentcar.heaven819.gcmpush;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.Rentcar.heaven819.gcmpush;end">🚗 팡팡렌트카</a>
+      <button class="link-btn" style="color:var(--purple);border:none;background:var(--panel2);" onclick="openSchedModal()">📅 일정</button>
       <button class="refresh-btn" onclick="reload(true)">↻ 새로고침</button>
     </div>
   </div>
   <div class="stats" id="statsRow"></div>
+  <div class="sched-banner" id="schedBanner"></div>
   <div class="search-row">
     <input id="searchInput" placeholder="차량번호 / 담당자 / 메모 검색" oninput="render()">
     <select id="sortSelect" onchange="render()" style="background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:9px 10px;font-size:13px;">
@@ -316,6 +378,14 @@
       <label>결제일 (매월 며칠)</label>
       <input id="mPayDay" type="number" min="1" max="31" placeholder="예: 5">
     </div>
+    <div class="field" id="mCustomerField" style="display:none;">
+      <label>고객명</label>
+      <input id="mCustomer" placeholder="예: 이동훈">
+    </div>
+    <div class="field" id="mCustomerPhoneField" style="display:none;">
+      <label>고객 전화번호</label>
+      <input id="mCustomerPhone" placeholder="010-1234-5678">
+    </div>
     <div class="field" id="mReturnDateField" style="display:none;">
       <label>반납일자</label>
       <input id="mReturnDate" type="date">
@@ -333,6 +403,53 @@
         <span style="position:relative;z-index:1;">🗑 길게 눌러서 삭제</span>
       </button>
     </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="schedModalBg">
+  <div class="modal">
+    <h3>📅 일정 관리</h3>
+    <div class="sub">오늘/내일 일정은 상단에 배너로 표시되고, 내일 일정은 저녁 6시 이후부터 미리 보여드려요.</div>
+
+    <div class="field">
+      <label>제목</label>
+      <input id="sTitle" placeholder="예: 차량 정기점검, 보험 갱신">
+    </div>
+    <div class="field">
+      <label>날짜</label>
+      <input id="sDate" type="date">
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:7px;">
+        <input type="checkbox" id="sRepeat" style="width:auto;">
+        <span style="font-size:13px;color:var(--text);">매월 같은 날짜에 반복</span>
+      </label>
+    </div>
+    <div class="field">
+      <label>메모 (선택)</label>
+      <input id="sMemo" placeholder="추가로 남겨둘 내용">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSchedModal()">닫기</button>
+      <button class="btn-save" onclick="addSchedule()">일정 추가</button>
+    </div>
+
+    <div class="cal-head">
+      <button onclick="calShiftMonth(-1)">‹</button>
+      <div class="cal-title" id="calTitle">-</div>
+      <button onclick="calShiftMonth(1)">›</button>
+    </div>
+    <div class="cal-grid" id="calDow">
+      <div class="cal-dow">일</div><div class="cal-dow">월</div><div class="cal-dow">화</div>
+      <div class="cal-dow">수</div><div class="cal-dow">목</div><div class="cal-dow">금</div><div class="cal-dow">토</div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+
+    <div class="cal-toolbar">
+      <div class="sub" id="schedListTitle">등록된 일정</div>
+      <button onclick="calShowAll()">전체 일정 보기</button>
+    </div>
+    <div id="schedList"></div>
   </div>
 </div>
 
@@ -485,6 +602,212 @@ function showToast(msg){
   window._toastTimer = setTimeout(()=>t.classList.remove('show'), 1800);
 }
 
+// ── 일정 관리 ──────────────────────────────────────────────
+let schedules = {}; // { key: {title, date:'YYYY-MM-DD', repeat:bool, memo} }
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function todayStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function tomorrowStr(){
+  const d = new Date();
+  d.setDate(d.getDate()+1);
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function matchesDate(sched, dateStr){
+  if(sched.repeat){
+    const day = Number(dateStr.split('-')[2]);
+    const schedDay = Number((sched.date||'').split('-')[2]);
+    return day === schedDay;
+  }
+  return sched.date === dateStr;
+}
+
+async function loadSchedules(){
+  const { ref, get, db } = window._fb;
+  try{
+    const snap = await get(ref(db, 'schedules'));
+    schedules = snap.exists() ? snap.val() : {};
+  }catch(e){
+    console.error(e);
+    schedules = {};
+  }
+}
+
+function startScheduleSync(){
+  const { ref, onValue, db } = window._fb;
+  onValue(ref(db, 'schedules'), (snap)=>{
+    schedules = snap.exists() ? snap.val() : {};
+    renderSchedBanner();
+    if(document.getElementById('schedModalBg').classList.contains('open')){
+      renderCalendar();
+      renderSchedList();
+    }
+  });
+}
+
+function renderSchedBanner(){
+  const el = document.getElementById('schedBanner');
+  const list = Object.values(schedules || {});
+  const today = todayStr();
+  const tomorrow = tomorrowStr();
+  const hour = new Date().getHours();
+
+  const todayItems = list.filter(s => matchesDate(s, today));
+  const showTomorrow = hour >= 18; // 저녁 6시 이후부터 내일 일정 미리 표시
+  const tomorrowItems = showTomorrow ? list.filter(s => matchesDate(s, tomorrow)) : [];
+
+  let html = '';
+  todayItems.forEach(s=>{
+    html += `<div class="sched-item today"><span class="sched-tag">오늘</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span></div>`;
+  });
+  tomorrowItems.forEach(s=>{
+    html += `<div class="sched-item tomorrow"><span class="sched-tag">내일</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span></div>`;
+  });
+  el.innerHTML = html;
+}
+
+function escapeHtml(s){
+  return (s||'').toString().replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+}
+
+function openSchedModal(){
+  document.getElementById('sTitle').value = '';
+  document.getElementById('sDate').value = todayStr();
+  document.getElementById('sRepeat').checked = false;
+  document.getElementById('sMemo').value = '';
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+  calSelectedDate = todayStr();
+  renderCalendar();
+  renderSchedList();
+  document.getElementById('schedModalBg').classList.add('open');
+}
+function closeSchedModal(){
+  document.getElementById('schedModalBg').classList.remove('open');
+}
+
+async function addSchedule(){
+  const title = document.getElementById('sTitle').value.trim();
+  const date = document.getElementById('sDate').value;
+  if(!title || !date){ showToast('제목과 날짜를 입력해주세요'); return; }
+  const { ref, push, db } = window._fb;
+  await push(ref(db, 'schedules'), {
+    title, date,
+    repeat: document.getElementById('sRepeat').checked,
+    memo: document.getElementById('sMemo').value.trim()
+  });
+  document.getElementById('sTitle').value = '';
+  document.getElementById('sMemo').value = '';
+  calSelectedDate = date;
+  const [ny, nm] = date.split('-').map(Number);
+  calYear = ny; calMonth = nm - 1;
+  renderCalendar();
+  renderSchedList();
+  showToast('일정이 추가되었습니다');
+}
+
+async function deleteSchedule(key){
+  const { ref, remove, db } = window._fb;
+  await remove(ref(db, 'schedules/'+key));
+  showToast('일정이 삭제되었습니다');
+}
+
+// ── 캘린더 뷰 ──────────────────────────────────────────────
+let calYear, calMonth; // 0-indexed month
+let calSelectedDate = null; // 'YYYY-MM-DD' or null(전체보기)
+
+function calShiftMonth(diff){
+  calMonth += diff;
+  if(calMonth < 0){ calMonth = 11; calYear--; }
+  if(calMonth > 11){ calMonth = 0; calYear++; }
+  renderCalendar();
+}
+
+function calShowAll(){
+  calSelectedDate = null;
+  renderCalendar();
+  renderSchedList();
+}
+
+function daysWithSchedule(year, month){
+  // 이 달(year, month)에 표시될 일정이 있는 날짜(day 숫자) 집합
+  const set = new Set();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  Object.values(schedules || {}).forEach(s=>{
+    if(!s.date) return;
+    if(s.repeat){
+      const schedDay = Number(s.date.split('-')[2]);
+      if(schedDay <= daysInMonth) set.add(schedDay);
+    }else{
+      const [y,m,d] = s.date.split('-').map(Number);
+      if(y === year && (m-1) === month) set.add(d);
+    }
+  });
+  return set;
+}
+
+function renderCalendar(){
+  document.getElementById('calTitle').textContent = `${calYear}년 ${calMonth+1}월`;
+  const grid = document.getElementById('calGrid');
+  const firstDow = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const markedDays = daysWithSchedule(calYear, calMonth);
+  const today = todayStr();
+
+  let html = '';
+  for(let i=0;i<firstDow;i++) html += `<div class="cal-cell empty"></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${calYear}-${pad2(calMonth+1)}-${pad2(d)}`;
+    let cls = 'cal-cell';
+    if(dateStr === today) cls += ' today';
+    if(dateStr === calSelectedDate) cls += ' selected';
+    html += `<div class="${cls}" onclick="calSelectDate('${dateStr}')">${d}${markedDays.has(d) ? '<span class="dot"></span>' : ''}</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function calSelectDate(dateStr){
+  calSelectedDate = dateStr;
+  document.getElementById('sDate').value = dateStr;
+  renderCalendar();
+  renderSchedList();
+}
+
+function renderSchedList(){
+  const el = document.getElementById('schedList');
+  const titleEl = document.getElementById('schedListTitle');
+  let entries = Object.entries(schedules || {});
+
+  if(calSelectedDate){
+    entries = entries.filter(([,s]) => matchesDate(s, calSelectedDate));
+    const [y,m,d] = calSelectedDate.split('-');
+    titleEl.textContent = `${m}월 ${d}일 일정`;
+  }else{
+    titleEl.textContent = '전체 일정';
+  }
+  entries.sort((a,b)=> (a[1].date||'').localeCompare(b[1].date||''));
+
+  if(entries.length===0){
+    el.innerHTML = `<div class="sched-empty">${calSelectedDate ? '이 날짜엔 등록된 일정이 없습니다' : '등록된 일정이 없습니다'}</div>`;
+    return;
+  }
+  el.innerHTML = entries.map(([key, s])=>{
+    const [y,m,d] = (s.date||'').split('-');
+    return `
+      <div class="sched-list-row">
+        <div>
+          <div class="d">${m}월 ${d}일${s.repeat?'<span class="sched-repeat-tag">매월 반복</span>':''}</div>
+          <div class="t">${escapeHtml(s.title)}</div>
+          ${s.memo?`<div class="m">${escapeHtml(s.memo)}</div>`:''}
+        </div>
+        <button class="del" onclick="deleteSchedule('${key}')">삭제</button>
+      </div>`;
+  }).join('');
+}
+
 let statusFilter = null; // null | '대기' | '준비중' | '운행중'
 
 function toggleStatusFilter(s){
@@ -514,10 +837,11 @@ function renderStats(){
 
 function render(){
   renderStats();
+  renderSchedBanner();
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
   let list = vehicles.filter(v=>{
     if(q){
-      const hay = (v.plate+' '+v.note+' '+v.model+' '+v.extra).toLowerCase();
+      const hay = (v.plate+' '+v.note+' '+v.model+' '+v.extra+' '+(v.customerName||'')).toLowerCase();
       if(!hay.includes(q)) return false;
     }
     if(statusFilter){
@@ -582,10 +906,10 @@ function render(){
             ${v.extra?`<div class="extra">${v.extra}</div>`:''}
             ${v.returnDate?`<div class="extra${due?' return-due':(soon?' return-soon':'')}">반납일자: ${formatReturnDate(v.returnDate)}</div>`:''}
           </div>
-          ${v.amount?`<div class="amount">${v.amount}만원${v.payDay?`<br>매월 ${v.payDay}일`:''}</div>`:''}
+          ${v.amount?`<div class="amount">${v.customerName?`${v.customerName}<br>`:''}${v.amount}만원${v.payDay?`<br>매월 ${v.payDay}일`:''}</div>`:''}
         </div>`;
     }).join('');
-    return `<div class="section-title"><span>${branch}</span><span>${items.length}대</span></div>${cards}`;
+    return `<div class="section-title"><span>${branch}</span><span style="display:flex;align-items:center;gap:8px;">${items.length}대${branch==='장기' ? `<a href="payment.html" style="color:var(--amber);text-decoration:none;font-weight:700;background:rgba(245,166,35,.15);padding:3px 9px;border-radius:20px;font-size:11px;">💳 결제일 알림</a>` : ''}</span></div>${cards}`;
   }).join('');
 }
 
@@ -656,6 +980,8 @@ function openModal(plate){
   document.getElementById('mExtraToggle').textContent = '✎ 수정';
   document.getElementById('mAmount').value = (v.amount===null || v.amount===undefined) ? '' : v.amount;
   document.getElementById('mPayDay').value = (v.payDay===null || v.payDay===undefined) ? '' : v.payDay;
+  document.getElementById('mCustomer').value = v.customerName || '';
+  document.getElementById('mCustomerPhone').value = v.customerPhone || '';
   document.getElementById('mReturnDate').value = v.returnDate || '';
   toggleAmountField('m', false);
   document.getElementById('modalBg').classList.add('open');
@@ -683,10 +1009,16 @@ function toggleAmountField(prefix, clear){
   const isGeneral = (type==='일반');
   document.getElementById(prefix+'AmountField').style.display = isLong ? '' : 'none';
   document.getElementById(prefix+'PayDayField').style.display = isLong ? '' : 'none';
+  const custField = document.getElementById(prefix+'CustomerField');
+  const custPhoneField = document.getElementById(prefix+'CustomerPhoneField');
+  if(custField) custField.style.display = isLong ? '' : 'none';
+  if(custPhoneField) custPhoneField.style.display = isLong ? '' : 'none';
   document.getElementById(prefix+'ReturnDateField').style.display = isGeneral ? '' : 'none';
   if(!isLong && clear!==false){
     document.getElementById(prefix+'Amount').value = '';
     document.getElementById(prefix+'PayDay').value = '';
+    if(document.getElementById(prefix+'Customer')) document.getElementById(prefix+'Customer').value = '';
+    if(document.getElementById(prefix+'CustomerPhone')) document.getElementById(prefix+'CustomerPhone').value = '';
   }
   if(!isGeneral && clear!==false){
     document.getElementById(prefix+'ReturnDate').value = '';
@@ -703,6 +1035,8 @@ async function saveModal(){
   v.amount = amtVal === '' ? null : Number(amtVal);
   const payDayVal = document.getElementById('mPayDay').value.trim();
   v.payDay = payDayVal === '' ? null : Number(payDayVal);
+  v.customerName = document.getElementById('mCustomer').value.trim();
+  v.customerPhone = document.getElementById('mCustomerPhone').value.trim();
   v.returnDate = document.getElementById('mReturnDate').value || null;
   if(v.type==='장기'){
     v.branch = '장기';
@@ -806,6 +1140,9 @@ function setDate(){
   await loadData();
   render();
   startRealtimeSync();
+  await loadSchedules();
+  renderSchedBanner();
+  startScheduleSync();
 })();
 </script>
 </body>
