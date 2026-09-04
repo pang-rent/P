@@ -338,9 +338,40 @@
   .cal-toolbar button{
     background:none; border:none; color:var(--blue); font-size:12px; cursor:pointer; padding:2px 4px;
   }
+
+  .auth-overlay{
+    position:fixed;inset:0;z-index:200;background:var(--bg);
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  }
+  .auth-box{
+    width:100%;max-width:320px;background:var(--panel);border:1px solid var(--line);
+    border-radius:16px;padding:30px 22px;text-align:center;
+  }
+  .auth-title{font-size:18px;font-weight:800;margin-bottom:4px;}
+  .auth-sub{font-size:12.5px;color:var(--sub);margin-bottom:20px;}
+  .auth-box input{
+    width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:13px;font-size:20px;text-align:center;letter-spacing:6px;
+    margin-bottom:8px;
+  }
+  .auth-error{color:var(--red);font-size:12px;min-height:16px;margin-bottom:10px;}
+  .auth-submit{
+    width:100%;padding:13px;border-radius:10px;border:none;background:var(--amber);
+    color:#1a1a1a;font-size:14px;font-weight:700;
+  }
 </style>
 </head>
 <body>
+
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-box">
+    <div class="auth-title">🚗 장성영업소 차량 현황판</div>
+    <div class="auth-sub">비밀번호를 입력하세요</div>
+    <input id="authInput" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" onkeydown="if(event.key==='Enter') submitAuth()">
+    <div class="auth-error" id="authError"></div>
+    <button class="auth-submit" onclick="submitAuth()">확인</button>
+  </div>
+</div>
 
 <header>
   <div class="title-row">
@@ -669,6 +700,48 @@
 
 <script>
 const STORAGE_KEY = 'fleet-vehicles-jangseong-v1';
+
+// ── 접근 비밀번호 (기기당 1회만 확인) ─────────────────────────
+const APP_PIN = '4199';
+const AUTH_KEY = 'fleet-auth-jangseong-v1';
+function isAuthed(){
+  return localStorage.getItem(AUTH_KEY) === 'ok';
+}
+function hideAuthOverlay(){
+  const el = document.getElementById('authOverlay');
+  if(el) el.style.display = 'none';
+}
+function submitAuth(){
+  const input = document.getElementById('authInput');
+  const val = (input.value || '').trim();
+  if(val === APP_PIN){
+    localStorage.setItem(AUTH_KEY, 'ok');
+    hideAuthOverlay();
+    startApp();
+  }else{
+    document.getElementById('authError').textContent = '비밀번호가 올바르지 않아요';
+    input.value = '';
+    input.focus();
+  }
+}
+
+// ── 수정 잠금(비밀번호) ───────────────────────────────────
+// 조회(목록/카드)는 누구나 자유롭게 볼 수 있고, 차량 정보를 고치거나 추가하거나
+// 변경기록을 복원할 때만 비밀번호를 물어봐요. 한 번 맞으면 그 기기(브라우저)에는
+// 계속 기억해둬서 매번 다시 묻지 않아요. 비밀번호는 아래 값만 바꾸면 됩니다.
+const EDIT_PIN = '0819';
+const EDIT_UNLOCK_KEY = 'jangseong-edit-unlocked-v1';
+function ensureEditUnlocked(){
+  if(localStorage.getItem(EDIT_UNLOCK_KEY) === '1') return true;
+  const input = window.prompt('수정하려면 비밀번호를 입력하세요.\n(조회만 하실 거면 취소를 누르셔도 돼요)');
+  if(input === null) return false;
+  if(input === EDIT_PIN){
+    localStorage.setItem(EDIT_UNLOCK_KEY, '1');
+    return true;
+  }
+  showToast('비밀번호가 틀렸습니다');
+  return false;
+}
 
 const SEED = [
 {no:'1',plate:'105하8495',branch:'장성',cls:'대형',model:'그랜저GN7',fuel:'LPG',status:'',extra:'자차:o',type:'보험',note:'수완현대 싼타페',amount:null,startDate:null},
@@ -1511,6 +1584,7 @@ async function setVehicleIdle(plate){
 }
 
 function openModal(plate){
+  if(!ensureEditUnlocked()) return;
   window._editingPlate = plate;
   const v = vehicles.find(x=>x.plate===plate);
   document.getElementById('mPlate').textContent = v.plate;
@@ -1785,6 +1859,7 @@ function cancelDeletePress(){
 }
 
 function openAddModal(){
+  if(!ensureEditUnlocked()) return;
   ['aPlate','aBranch','aCls','aModel','aFuel','aExtra','aInsuranceDate','aInspectionDate','aRegDate','aAgeExpireDate'].forEach(id=>{
     document.getElementById(id).value = '';
   });
@@ -1910,7 +1985,7 @@ function setDate(){
     `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 ${days[d.getDay()]}요일`;
 }
 
-(async function init(){
+async function startApp(){
   setDate();
   if(!window._fbReady){
     await new Promise(resolve => window.addEventListener('fb-ready', resolve, {once:true}));
@@ -1922,6 +1997,16 @@ function setDate(){
   renderSchedBanner();
   startScheduleSync();
   await syncAllReturnSchedules();
+}
+
+(function initGate(){
+  if(isAuthed()){
+    hideAuthOverlay();
+    startApp();
+  }else{
+    const input = document.getElementById('authInput');
+    if(input) input.focus();
+  }
 })();
 </script>
 </body>
