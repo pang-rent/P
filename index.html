@@ -80,14 +80,9 @@
     padding:14px 14px 8px;
     border-bottom:1px solid var(--line);
   }
-  header .title-row{display:flex;justify-content:center;align-items:center;gap:8px;text-align:center;}
+  header .title-row{display:flex;justify-content:center;align-items:flex-start;gap:8px;text-align:center;}
   header h1{font-size:17px;margin:0;font-weight:700;}
   header .date{font-size:11px;color:var(--sub);}
-  .history-btn{
-    background:var(--panel2);border:1px solid var(--line);color:var(--blue);
-    border-radius:8px;width:32px;height:32px;font-size:15px;flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;
-  }
   .refresh-btn{
     background:var(--panel2);border:1px solid var(--line);color:var(--amber);
     border-radius:8px;padding:8px 6px;font-size:12px;font-weight:600;
@@ -220,12 +215,10 @@
   .field input:disabled{opacity:.55;}
   .accordion-header{
     display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
-    background:rgba(245,166,35,.10);border:1px solid var(--line);border-left:4px solid var(--amber);
-    border-radius:9px;
-    padding:13px 14px;margin:20px 0 14px;font-size:14.5px;font-weight:800;color:var(--amber);
+    background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+    padding:10px 12px;margin-bottom:12px;font-size:13px;font-weight:700;color:var(--text);
   }
-  .accordion-header:first-child{margin-top:2px;}
-  .accordion-icon{margin-left:auto;color:var(--amber);font-size:13px;transition:transform .15s;}
+  .accordion-icon{margin-left:auto;color:var(--sub);font-size:11px;transition:transform .15s;}
   .accordion-icon.open{transform:rotate(90deg);}
   .accordion-badge{
     font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;
@@ -338,40 +331,9 @@
   .cal-toolbar button{
     background:none; border:none; color:var(--blue); font-size:12px; cursor:pointer; padding:2px 4px;
   }
-
-  .auth-overlay{
-    position:fixed;inset:0;z-index:200;background:var(--bg);
-    display:flex;align-items:center;justify-content:center;padding:20px;
-  }
-  .auth-box{
-    width:100%;max-width:320px;background:var(--panel);border:1px solid var(--line);
-    border-radius:16px;padding:30px 22px;text-align:center;
-  }
-  .auth-title{font-size:18px;font-weight:800;margin-bottom:4px;}
-  .auth-sub{font-size:12.5px;color:var(--sub);margin-bottom:20px;}
-  .auth-box input{
-    width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
-    border-radius:10px;padding:13px;font-size:20px;text-align:center;letter-spacing:6px;
-    margin-bottom:8px;
-  }
-  .auth-error{color:var(--red);font-size:12px;min-height:16px;margin-bottom:10px;}
-  .auth-submit{
-    width:100%;padding:13px;border-radius:10px;border:none;background:var(--amber);
-    color:#1a1a1a;font-size:14px;font-weight:700;
-  }
 </style>
 </head>
 <body>
-
-<div class="auth-overlay" id="authOverlay">
-  <div class="auth-box">
-    <div class="auth-title">🚗 장성영업소 차량 현황판</div>
-    <div class="auth-sub">비밀번호를 입력하세요</div>
-    <input id="authInput" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" onkeydown="if(event.key==='Enter') submitAuth()">
-    <div class="auth-error" id="authError"></div>
-    <button class="auth-submit" onclick="submitAuth()">확인</button>
-  </div>
-</div>
 
 <header>
   <div class="title-row">
@@ -379,7 +341,6 @@
       <h1>🚗 장성영업소 차량 현황판</h1>
       <div class="date" id="dateLine"></div>
     </div>
-    <button class="history-btn" onclick="openHistoryModal()" title="변경기록">🕒</button>
   </div>
   <div class="header-actions">
     <a class="link-btn telegram" href="intent://t.me/+zgPlZTwlkk8wYWVl#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Ft.me%2F%2BzgPlZTwlkk8wYWVl;end">📱 텔레그램방</a>
@@ -466,13 +427,9 @@
         <div id="mAgeExtendInfo" style="font-size:10.5px;color:var(--sub);margin-top:4px;"></div>
       </div>
       <div class="field">
-        <label style="display:flex;justify-content:space-between;align-items:center;">
-          <span>A/S 기간 (년)</span>
-          <button type="button" onclick="ackAsExpireInModal()"
-            style="background:var(--panel2);border:1px solid var(--line);color:var(--green);border-radius:20px;padding:3px 10px;font-size:10.5px;font-weight:700;">✓ 만료 확인</button>
-        </label>
+        <label>A/S 기간 (년)</label>
         <input id="mAsYears" type="number" min="1" max="10" placeholder="예: 3" value="3" onchange="updateAgeInfo('m')">
-        <div id="mAsInfo" style="font-size:10.5px;color:var(--sub);margin-top:4px;">💡 대부분 3년/6만km이지만 5년짜리 등 다른 차량은 여기서 직접 바꿔주세요. 주행거리는 추적하지 않아 연식 기준으로만 임박 알림을 드려요. 만료(임박) 상태를 확인했으면 위 '만료 확인' 버튼을 누르면 현황판에서 숨겨져요 (저장 필요).</div>
+        <div id="mAsInfo" style="font-size:10.5px;color:var(--sub);margin-top:4px;">💡 대부분 3년/6만km이지만 5년짜리 등 다른 차량은 여기서 직접 바꿔주세요. 주행거리는 추적하지 않아 연식 기준으로만 임박 알림을 드려요.</div>
       </div>
       <div class="field">
         <label style="display:flex;justify-content:space-between;align-items:center;">
@@ -685,63 +642,10 @@
   </div>
 </div>
 
-<div class="modal-bg" id="historyModalBg">
-  <div class="modal">
-    <h3>🕒 변경 기록</h3>
-    <div class="sub">저장할 때마다 그 직전 상태가 자동으로 남아요. 실수했으면 원하는 시점으로 되돌릴 수 있어요.</div>
-    <div id="historyList"><div class="empty">불러오는 중...</div></div>
-    <div class="modal-actions" style="margin-top:14px;">
-      <button class="btn-cancel" style="width:100%;padding:15px;font-size:15px;font-weight:700;border-radius:12px;" onclick="closeHistoryModal()">닫기</button>
-    </div>
-  </div>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>
 const STORAGE_KEY = 'fleet-vehicles-jangseong-v1';
-
-// ── 접근 비밀번호 (기기당 1회만 확인) ─────────────────────────
-const APP_PIN = '4199';
-const AUTH_KEY = 'fleet-auth-jangseong-v1';
-function isAuthed(){
-  return localStorage.getItem(AUTH_KEY) === 'ok';
-}
-function hideAuthOverlay(){
-  const el = document.getElementById('authOverlay');
-  if(el) el.style.display = 'none';
-}
-function submitAuth(){
-  const input = document.getElementById('authInput');
-  const val = (input.value || '').trim();
-  if(val === APP_PIN){
-    localStorage.setItem(AUTH_KEY, 'ok');
-    hideAuthOverlay();
-    startApp();
-  }else{
-    document.getElementById('authError').textContent = '비밀번호가 올바르지 않아요';
-    input.value = '';
-    input.focus();
-  }
-}
-
-// ── 수정 잠금(비밀번호) ───────────────────────────────────
-// 조회(목록/카드)는 누구나 자유롭게 볼 수 있고, 차량 정보를 고치거나 추가하거나
-// 변경기록을 복원할 때만 비밀번호를 물어봐요. 한 번 맞으면 그 기기(브라우저)에는
-// 계속 기억해둬서 매번 다시 묻지 않아요. 비밀번호는 아래 값만 바꾸면 됩니다.
-const EDIT_PIN = '0819';
-const EDIT_UNLOCK_KEY = 'jangseong-edit-unlocked-v1';
-function ensureEditUnlocked(){
-  if(localStorage.getItem(EDIT_UNLOCK_KEY) === '1') return true;
-  const input = window.prompt('수정하려면 비밀번호를 입력하세요.\n(조회만 하실 거면 취소를 누르셔도 돼요)');
-  if(input === null) return false;
-  if(input === EDIT_PIN){
-    localStorage.setItem(EDIT_UNLOCK_KEY, '1');
-    return true;
-  }
-  showToast('비밀번호가 틀렸습니다');
-  return false;
-}
 
 const SEED = [
 {no:'1',plate:'105하8495',branch:'장성',cls:'대형',model:'그랜저GN7',fuel:'LPG',status:'',extra:'자차:o',type:'보험',note:'수완현대 싼타페',amount:null,startDate:null},
@@ -969,7 +873,14 @@ function renderAsLine(v){
   const cls = due ? ' return-due' : ' return-soon';
   const icon = due ? '⏰' : '🔧';
   const label = due ? `A/S 만료 (${years}년 기준)` : `A/S 종료 임박 (${years}년 기준)`;
-  return `<div class="extra${cls}">${icon} ${label}: ${formatReturnDate(asExpire)}</div>`;
+  return `<div class="extra${cls}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+    <span>${icon} ${label}: ${formatReturnDate(asExpire)}</span>
+    <button type="button"
+      onclick="event.stopPropagation(); ackAsExpire('${v.plate}')"
+      onpointerdown="event.stopPropagation();"
+      onpointerup="event.stopPropagation();"
+      style="flex-shrink:0;background:var(--panel2);border:1px solid var(--line);color:var(--green);border-radius:20px;padding:3px 10px;font-size:10.5px;font-weight:700;">✓ 확인</button>
+  </div>`;
 }
 function renderInspectionLine(v){
   if(!v.inspectionDate) return '';
@@ -982,7 +893,14 @@ function renderInspectionLine(v){
   }
   const cls = due ? ' return-due' : ' return-soon';
   const icon = due ? '⏰' : '🔔';
-  return `<div class="extra${cls}">${icon} ${label} 예정: ${formatReturnDate(v.inspectionDate)}</div>`;
+  return `<div class="extra${cls}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+    <span>${icon} ${label} 예정: ${formatReturnDate(v.inspectionDate)}</span>
+    <button type="button"
+      onclick="event.stopPropagation(); completeInspection('${v.plate}')"
+      onpointerdown="event.stopPropagation();"
+      onpointerup="event.stopPropagation();"
+      style="flex-shrink:0;background:var(--panel2);border:1px solid var(--line);color:var(--green);border-radius:20px;padding:3px 10px;font-size:10.5px;font-weight:700;">✓ 완료</button>
+  </div>`;
 }
 function insuranceBadge(v){
   if(!v.insuranceDate) return '';
@@ -1045,40 +963,10 @@ function autoFlagReturnDue(){
   if(changed) persist();
 }
 
-const HISTORY_KEY = 'history-jangseong-v1';
-const HISTORY_MAX = 30;
-
-async function snapshotHistory(){
-  const { ref, get, set, push, db } = window._fb;
-  try{
-    const prevSnap = await get(ref(db, STORAGE_KEY));
-    if(!prevSnap.exists()) return;
-    const newRef = push(ref(db, HISTORY_KEY));
-    await set(newRef, { vehicles: prevSnap.val(), savedAt: Date.now() });
-    await pruneHistory();
-  }catch(e){
-    console.error('history snapshot failed', e);
-  }
-}
-
-async function pruneHistory(){
-  const { ref, get, remove, db } = window._fb;
-  const snap = await get(ref(db, HISTORY_KEY));
-  if(!snap.exists()) return;
-  const keys = Object.keys(snap.val()).sort(); // push 키는 시간순 정렬됨
-  if(keys.length > HISTORY_MAX){
-    const excess = keys.slice(0, keys.length - HISTORY_MAX);
-    for(const k of excess){
-      await remove(ref(db, HISTORY_KEY + '/' + k));
-    }
-  }
-}
-
 async function persist(){
   const { ref, set, db } = window._fb;
   try{
     _suppressNextRemote = true;
-    await snapshotHistory(); // 덮어쓰기 전 이전 상태를 변경 기록에 먼저 남김
     await set(ref(db, STORAGE_KEY), vehicles);
     showToast('저장됨 · 다른 직원 화면에도 실시간 반영됩니다');
   }catch(e){
@@ -1540,6 +1428,40 @@ function handleCardClick(e, plate){
   }
   openModal(plate);
 }
+async function completeInspection(plate){
+  const v = vehicles.find(x=>x.plate===plate);
+  if(!v || !v.inspectionDate) return;
+  const wasExtension = v.inspectionType === '연장';
+  const nextDate = addYears(v.inspectionDate, INSPECTION_CYCLE_YEARS);
+  const extendCount = v.ageExtendCount || 0;
+  const oldAgeExpireDate = v.ageExpireDate || null;
+  let extendMsg = '';
+  if(wasExtension && v.ageExpireDate){
+    if(extendCount < AGE_EXTEND_MAX){
+      const newExpire = addYears(v.ageExpireDate, 1);
+      if(!confirm(`연장검사 완료 확정하시겠습니까?\n(차령 만료일이 1년 연장되어 ${newExpire}로 변경되고, 다음 검사 예정일이 ${nextDate}로 자동 변경됩니다)`)) return;
+      v.ageExpireDate = newExpire;
+      v.ageExtendCount = extendCount + 1;
+      extendMsg = ` · 차령 만료일 1년 연장 (${v.ageExtendCount}/${AGE_EXTEND_MAX}회 사용)`;
+    }else{
+      if(!confirm(`검사 완료 확정하시겠습니까?\n(차령연장은 이미 ${AGE_EXTEND_MAX}회를 모두 사용해 차령 만료일은 더 늘어나지 않습니다)`)) return;
+      extendMsg = ` · ⚠️ 차령연장 ${AGE_EXTEND_MAX}회 모두 소진, 만료일 그대로`;
+    }
+  }else{
+    if(!confirm(`검사 완료 확정하시겠습니까?\n(다음 검사 예정일이 ${nextDate}로 자동 변경됩니다)`)) return;
+  }
+  v.inspectionDate = nextDate;
+  v.inspectionDone = false;
+  if(v.ageExpireDate){
+    const t = calcInspectionType(v.ageExpireDate, nextDate);
+    if(t) v.inspectionType = t;
+  }
+  render();
+  await persist();
+  await syncAgeExpireSchedule(v.plate, oldAgeExpireDate, v.ageExpireDate);
+  const typeLabel = v.inspectionType==='연장' ? '연장검사' : '일반검사';
+  showToast(`✅ 검사 완료 · 다음 ${typeLabel} 예정일 ${nextDate}로 자동 설정됐어요${extendMsg}`);
+}
 function updateInsuranceInfo(){
   const insEl = document.getElementById('mInsuranceDate');
   const infoEl = document.getElementById('mInsuranceInfo');
@@ -1558,14 +1480,15 @@ function completeInsuranceInModal(){
   updateInsuranceInfo();
   showToast(`다음 갱신 예정일 ${nextDate}로 변경됐어요 · 저장을 눌러야 반영됩니다`);
 }
-function ackAsExpireInModal(){
-  const v = vehicles.find(x=>x.plate===window._editingPlate);
-  if(!v || !v.regDate){ showToast('최초등록일을 먼저 입력하세요'); return; }
+async function ackAsExpire(plate){
+  const v = vehicles.find(x=>x.plate===plate);
+  if(!v || !v.regDate) return;
   if(!confirm('A/S기간 종료 임박 확인하셨습니까?')) return;
-  const years = Number(document.getElementById('mAsYears').value) || AS_YEARS_DEFAULT;
+  const years = v.asYears || AS_YEARS_DEFAULT;
   v.asAckExpire = calcAsExpireDate(v.regDate, years);
-  setupDocsBadge(v, false);
-  showToast('✅ A/S 만료 확인 처리됐어요 · 저장을 눌러야 반영됩니다');
+  render();
+  await persist();
+  showToast('✅ A/S 만료 확인 처리되었습니다 · 현황판에서 숨김');
 }
 async function setVehicleIdle(plate){
   const v = vehicles.find(x=>x.plate===plate);
@@ -1584,7 +1507,6 @@ async function setVehicleIdle(plate){
 }
 
 function openModal(plate){
-  if(!ensureEditUnlocked()) return;
   window._editingPlate = plate;
   const v = vehicles.find(x=>x.plate===plate);
   document.getElementById('mPlate').textContent = v.plate;
@@ -1622,32 +1544,28 @@ function closeModal(){
   cancelDeletePress();
 }
 function setStatus(s){ document.getElementById('mStatus').value = s; }
-function setupDocsBadge(v, autoToggle){
-  if(autoToggle===undefined) autoToggle = true;
-  const asExpire = v.regDate ? calcAsExpireDate(v.regDate, v.asYears || AS_YEARS_DEFAULT) : null;
-  const asAcked = !!(asExpire && v.asAckExpire === asExpire);
+function setupDocsBadge(v){
   const items = [
-    {dateStr:v.insuranceDate, done:false, soonDays:30},
-    {dateStr:v.inspectionDate, done:v.inspectionDone, soonDays:30},
-    {dateStr:v.ageExpireDate, done:false, soonDays:30},
-    {dateStr:asExpire, done:asAcked, soonDays:AS_SOON_DAYS}
+    {dateStr:v.insuranceDate, done:false},
+    {dateStr:v.inspectionDate, done:v.inspectionDone},
+    {dateStr:v.ageExpireDate, done:false}
   ].filter(it=>it.dateStr && !it.done);
   const dueCount = items.filter(it=>isReturnDue(it.dateStr)).length;
-  const soonCount = items.filter(it=>!isReturnDue(it.dateStr) && isReturnSoon(it.dateStr,it.soonDays)).length;
+  const soonCount = items.filter(it=>!isReturnDue(it.dateStr) && isReturnSoon(it.dateStr,30)).length;
   const badge = document.getElementById('mDocsBadge');
   if(dueCount>0){
     badge.textContent = `⏰ 지남 ${dueCount}건`;
     badge.className = 'accordion-badge due';
     badge.style.display = '';
-    if(autoToggle) toggleDocsSection(true);
+    toggleDocsSection(true);
   }else if(soonCount>0){
     badge.textContent = `🔔 임박 ${soonCount}건`;
     badge.className = 'accordion-badge';
     badge.style.display = '';
-    if(autoToggle) toggleDocsSection(true);
+    toggleDocsSection(true);
   }else{
     badge.style.display = 'none';
-    if(autoToggle) toggleDocsSection(false);
+    toggleDocsSection(false);
   }
 }
 function toggleDocsSection(force){
@@ -1676,47 +1594,17 @@ function syncInspectionDoneUI(){
     const dateEl = document.getElementById('mInspectionDate');
     const cur = dateEl.value;
     if(cur){
-      const v = vehicles.find(x=>x.plate===window._editingPlate);
-      const typeEl = document.getElementById('mInspectionType');
-      const ageExpireEl = document.getElementById('mAgeExpireDate');
-      const wasExtension = typeEl.value === '연장';
       const next = addYears(cur, INSPECTION_CYCLE_YEARS);
-      const extendCount = (v && v.ageExtendCount) || 0;
-      let extendMsg = '';
-      if(wasExtension && ageExpireEl.value){
-        if(extendCount < AGE_EXTEND_MAX){
-          const newExpire = addYears(ageExpireEl.value, 1);
-          if(!confirm(`연장검사 완료 확정하시겠습니까?\n(차령 만료일이 1년 연장되어 ${newExpire}로 변경되고, 다음 검사 예정일이 ${next}로 자동 변경됩니다)`)){
-            cb.checked = false;
-            document.getElementById('mInspectionDoneWrap').classList.toggle('on', false);
-            return;
-          }
-          ageExpireEl.value = newExpire;
-          if(v){
-            v.ageExtendCount = extendCount + 1;
-            updateAgeExtendInfo(v);
-          }
-          extendMsg = ` · 차령 만료일 1년 연장 (${extendCount + 1}/${AGE_EXTEND_MAX}회 사용)`;
-        }else{
-          if(!confirm(`검사 완료 확정하시겠습니까?\n(차령연장은 이미 ${AGE_EXTEND_MAX}회를 모두 사용해 차령 만료일은 더 늘어나지 않습니다)`)){
-            cb.checked = false;
-            document.getElementById('mInspectionDoneWrap').classList.toggle('on', false);
-            return;
-          }
-          extendMsg = ` · ⚠️ 차령연장 ${AGE_EXTEND_MAX}회 모두 소진, 만료일 그대로`;
-        }
-      }else{
-        if(!confirm(`검사 완료 확정하시겠습니까?\n(다음 검사 예정일이 ${next}로 자동 변경됩니다)`)){
-          cb.checked = false;
-          document.getElementById('mInspectionDoneWrap').classList.toggle('on', false);
-          return;
-        }
+      if(!confirm(`검사 완료 확정하시겠습니까?\n(다음 검사 예정일이 ${next}로 자동 변경됩니다)`)){
+        cb.checked = false;
+        document.getElementById('mInspectionDoneWrap').classList.toggle('on', false);
+        return;
       }
       dateEl.value = next;
       autoSetInspectionType('m', true);
       cb.checked = false;
       document.getElementById('mInspectionDoneWrap').classList.toggle('on', false);
-      showToast(`검사 완료 처리 · 다음 검사 예정일 ${next}로 자동 변경됐어요${extendMsg}`);
+      showToast(`검사 완료 처리 · 다음 검사 예정일 ${next}로 자동 변경됐어요`);
       return;
     }
   }
@@ -1754,18 +1642,21 @@ function toggleAmountField(prefix, clear){
     document.getElementById(prefix+'ReturnDate').value = '';
   }
 }
+function scheduleKeyFor(kind, plate){
+  return `auto-${kind}-` + (plate||'').toString().replace(/[.#$\[\]\/\s]/g,'_');
+}
 function scheduleKeyForPlate(plate){
-  return 'auto-return-' + (plate||'').toString().replace(/[.#$\[\]\/\s]/g,'_');
+  return scheduleKeyFor('return', plate);
 }
 
-async function syncReturnSchedule(plate, oldDate, newDate){
+async function syncAutoSchedule(kind, title, plate, oldDate, newDate){
   const { ref, set, update, db } = window._fb;
-  const key = scheduleKeyForPlate(plate);
+  const key = scheduleKeyFor(kind, plate);
   if(newDate){
     if(newDate !== oldDate){
-      // 새 반납일이거나 날짜가 바뀐 경우: 완료 상태를 초기화하고 등록/갱신
+      // 새 날짜이거나 날짜가 바뀐 경우: 완료 상태를 초기화하고 등록/갱신
       await set(ref(db, 'schedules/'+key), {
-        title: `${plate} 차량 반납일`,
+        title: title,
         date: newDate,
         repeat: false,
         memo: '',
@@ -1775,28 +1666,44 @@ async function syncReturnSchedule(plate, oldDate, newDate){
     }
     // 날짜가 그대로면 완료 상태 등 기존 값을 건드리지 않음
   } else if(oldDate){
-    // 반납일을 지웠다 = 차량이 회수됨 → 삭제 대신 완료 처리해서 기록을 남김
+    // 날짜를 지웠다 = 해당 항목이 사라짐 → 삭제 대신 완료 처리해서 기록을 남김
     await update(ref(db, 'schedules/'+key), { done: true });
   }
 }
+async function syncReturnSchedule(plate, oldDate, newDate){
+  await syncAutoSchedule('return', `${plate} 차량 반납일`, plate, oldDate, newDate);
+}
+async function syncInsuranceSchedule(plate, oldDate, newDate){
+  await syncAutoSchedule('insurance', `${plate} 보험 갱신일`, plate, oldDate, newDate);
+}
+async function syncAgeExpireSchedule(plate, oldDate, newDate){
+  await syncAutoSchedule('ageexpire', `${plate} 차령 만료일`, plate, oldDate, newDate);
+}
 
-async function syncAllReturnSchedules(){
-  for(const v of vehicles){
-    const key = scheduleKeyForPlate(v.plate);
-    const existing = schedules[key];
-    if(v.returnDate){
-      if(!existing || existing.date !== v.returnDate){
-        await syncReturnSchedule(v.plate, null, v.returnDate);
-      }
-    } else if(existing && !existing.done){
-      await syncReturnSchedule(v.plate, existing.date, null);
+async function syncAutoField(kind, title, plate, currentDate){
+  const key = scheduleKeyFor(kind, plate);
+  const existing = schedules[key];
+  if(currentDate){
+    if(!existing || existing.date !== currentDate){
+      await syncAutoSchedule(kind, title, plate, existing ? existing.date : null, currentDate);
     }
+  } else if(existing && !existing.done){
+    await syncAutoSchedule(kind, title, plate, existing.date, null);
+  }
+}
+async function syncAllAutoSchedules(){
+  for(const v of vehicles){
+    await syncAutoField('return', `${v.plate} 차량 반납일`, v.plate, v.returnDate);
+    await syncAutoField('insurance', `${v.plate} 보험 갱신일`, v.plate, v.insuranceDate);
+    await syncAutoField('ageexpire', `${v.plate} 차령 만료일`, v.plate, v.ageExpireDate);
   }
 }
 
 async function saveModal(){
   const v = vehicles.find(x=>x.plate===window._editingPlate);
   const oldReturnDate = v.returnDate || null;
+  const oldInsuranceDate = v.insuranceDate || null;
+  const oldAgeExpireDate = v.ageExpireDate || null;
   v.type = document.getElementById('mType').value;
   v.startDate = document.getElementById('mStartDate').value || null;
   v.status = document.getElementById('mStatus').value.trim();
@@ -1826,6 +1733,8 @@ async function saveModal(){
   render();
   await persist();
   await syncReturnSchedule(v.plate, oldReturnDate, v.returnDate);
+  await syncInsuranceSchedule(v.plate, oldInsuranceDate, v.insuranceDate);
+  await syncAgeExpireSchedule(v.plate, oldAgeExpireDate, v.ageExpireDate);
 }
 
 async function deleteVehicle(){
@@ -1836,7 +1745,9 @@ async function deleteVehicle(){
   render();
   await persist();
   const { ref, remove, db } = window._fb;
-  await remove(ref(db, 'schedules/'+scheduleKeyForPlate(plate)));
+  await remove(ref(db, 'schedules/'+scheduleKeyFor('return', plate)));
+  await remove(ref(db, 'schedules/'+scheduleKeyFor('insurance', plate)));
+  await remove(ref(db, 'schedules/'+scheduleKeyFor('ageexpire', plate)));
   showToast('차량이 삭제되었습니다');
 }
 function startDeletePress(){
@@ -1859,7 +1770,6 @@ function cancelDeletePress(){
 }
 
 function openAddModal(){
-  if(!ensureEditUnlocked()) return;
   ['aPlate','aBranch','aCls','aModel','aFuel','aExtra','aInsuranceDate','aInspectionDate','aRegDate','aAgeExpireDate'].forEach(id=>{
     document.getElementById(id).value = '';
   });
@@ -1889,7 +1799,7 @@ async function saveAddModal(){
     return;
   }
   const aBranch = document.getElementById('aBranch').value.trim() || '장성';
-  vehicles.push({
+  const newVehicle = {
     no:'+',
     plate,
     branch:aBranch,
@@ -1912,10 +1822,13 @@ async function saveAddModal(){
     ageExpireDate:document.getElementById('aAgeExpireDate').value || null,
     asYears:Number(document.getElementById('aAsYears').value) || AS_YEARS_DEFAULT,
     ageExtendCount:0
-  });
+  };
+  vehicles.push(newVehicle);
   closeAddModal();
   render();
   await persist();
+  await syncInsuranceSchedule(newVehicle.plate, null, newVehicle.insuranceDate);
+  await syncAgeExpireSchedule(newVehicle.plate, null, newVehicle.ageExpireDate);
   showToast('차량이 추가되었습니다');
 }
 
@@ -1925,59 +1838,6 @@ async function reload(manual){
   if(manual) showToast('최신 데이터로 새로고침 되었습니다');
 }
 
-function closeHistoryModal(){
-  document.getElementById('historyModalBg').classList.remove('open');
-}
-function formatHistoryTime(ts){
-  const d = new Date(ts);
-  const days=['일','월','화','수','목','금','토'];
-  return `${d.getFullYear()}.${pad2(d.getMonth()+1)}.${pad2(d.getDate())}(${days[d.getDay()]}) ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-async function openHistoryModal(){
-  document.getElementById('historyModalBg').classList.add('open');
-  const listEl = document.getElementById('historyList');
-  listEl.innerHTML = `<div class="empty">불러오는 중...</div>`;
-  const { ref, get, db } = window._fb;
-  try{
-    const snap = await get(ref(db, HISTORY_KEY));
-    if(!snap.exists()){
-      listEl.innerHTML = `<div class="empty">아직 변경 기록이 없어요.<br>다음 저장부터 자동으로 기록이 남아요.</div>`;
-      return;
-    }
-    const obj = snap.val();
-    const entries = Object.keys(obj)
-      .map(k=>({key:k, savedAt:obj[k].savedAt, count:(obj[k].vehicles||[]).length}))
-      .sort((a,b)=>b.savedAt-a.savedAt);
-    listEl.innerHTML = entries.map(e=>`
-      <div class="sched-list-row">
-        <div>
-          <div class="t">${formatHistoryTime(e.savedAt)}</div>
-          <div class="m">저장 직전 상태 · 차량 ${e.count}대</div>
-        </div>
-        <button class="del" style="color:var(--blue);font-weight:700;" onclick="restoreHistory('${e.key}')">↩ 복원</button>
-      </div>`).join('');
-  }catch(e){
-    console.error(e);
-    listEl.innerHTML = `<div class="empty">불러오기 실패했어요.</div>`;
-  }
-}
-async function restoreHistory(key){
-  if(!confirm('이 시점 상태로 되돌리시겠습니까?\n(되돌리기 전 현재 상태도 자동으로 기록에 남으니, 필요하면 다시 앞으로 되돌릴 수 있어요)')) return;
-  const { ref, get, db } = window._fb;
-  try{
-    const snap = await get(ref(db, HISTORY_KEY + '/' + key));
-    if(!snap.exists()){ showToast('해당 기록을 찾을 수 없어요'); return; }
-    vehicles = snap.val().vehicles || [];
-    render();
-    await persist();
-    closeHistoryModal();
-    showToast('✅ 이전 상태로 복원됐어요');
-  }catch(e){
-    console.error(e);
-    showToast('복원 실패 - 다시 시도해주세요');
-  }
-}
-
 function setDate(){
   const d = new Date();
   const days=['일','월','화','수','목','금','토'];
@@ -1985,7 +1845,7 @@ function setDate(){
     `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 ${days[d.getDay()]}요일`;
 }
 
-async function startApp(){
+(async function init(){
   setDate();
   if(!window._fbReady){
     await new Promise(resolve => window.addEventListener('fb-ready', resolve, {once:true}));
@@ -1996,17 +1856,7 @@ async function startApp(){
   await loadSchedules();
   renderSchedBanner();
   startScheduleSync();
-  await syncAllReturnSchedules();
-}
-
-(function initGate(){
-  if(isAuthed()){
-    hideAuthOverlay();
-    startApp();
-  }else{
-    const input = document.getElementById('authInput');
-    if(input) input.focus();
-  }
+  await syncAllAutoSchedules();
 })();
 </script>
 </body>
