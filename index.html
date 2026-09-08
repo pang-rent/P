@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
 <title>장성영업소 차량 현황판</title>
 <script>
   // 카카오톡 등 인앱브라우저에서 열렸으면 외부 브라우저(크롬/사파리)로 자동 이탈
@@ -43,11 +44,23 @@
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getDatabase, ref, get, set, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
+  const auth = getAuth(app);
   window._fb = { ref, get, set, onValue, push, remove, db };
-  window._fbReady = true;
-  window.dispatchEvent(new Event('fb-ready'));
+  // 익명 로그인 후에만 fb-ready 발생시킴 → 아래 Realtime Database 규칙을
+  // "auth != null" 로 바꾸면, URL/API키만으로는 접근 못하고 이 페이지를
+  // 거쳐야만(=로그인 절차를 통과해야만) 데이터를 읽고 쓸 수 있게 됨.
+  onAuthStateChanged(auth, (user)=>{
+    if(user){
+      window._fbReady = true;
+      window.dispatchEvent(new Event('fb-ready'));
+    }
+  });
+  signInAnonymously(auth).catch((err)=>{
+    console.error('익명 로그인 실패', err);
+  });
 </script>
 <style>
   :root{
@@ -199,6 +212,25 @@
   .card.return-soon-alert{border-left-color:var(--amber);}
   .empty{text-align:center;color:var(--sub);font-size:13px;padding:30px 0;}
 
+  .lock-screen{
+    position:fixed;inset:0;background:var(--bg);z-index:999;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:24px;gap:14px;text-align:center;
+  }
+  .lock-screen .lock-icon{font-size:34px;}
+  .lock-screen h2{margin:0;font-size:17px;}
+  .lock-screen p{margin:0;color:var(--sub);font-size:12.5px;}
+  .lock-screen input{
+    width:220px;max-width:80%;text-align:center;letter-spacing:6px;font-size:18px;
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:12px;margin-top:6px;
+  }
+  .lock-screen button{
+    width:220px;max-width:80%;padding:12px;border-radius:10px;border:none;
+    background:var(--amber);color:#1a1300;font-weight:700;font-size:14px;
+  }
+  .lock-screen .lock-err{color:var(--red);font-size:12px;min-height:16px;}
+
   .modal-bg{
     position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;
     display:none;align-items:flex-end;justify-content:center;
@@ -342,6 +374,15 @@
 </style>
 </head>
 <body>
+
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-icon">🔒</div>
+  <h2>장성영업소 차량 현황판</h2>
+  <p>비밀번호를 입력하면 이 기기에서는 계속 자동으로 열려요</p>
+  <input type="password" inputmode="numeric" id="lockPinInput" placeholder="비밀번호" onkeydown="if(event.key==='Enter')tryUnlock()">
+  <button onclick="tryUnlock()">확인</button>
+  <div class="lock-err" id="lockErr"></div>
+</div>
 
 <header>
   <div class="title-row">
@@ -670,6 +711,32 @@
 
 <script>
 const STORAGE_KEY = 'fleet-vehicles-jangseong-v1';
+
+// ── 최초 1회 비밀번호 확인 (이후엔 이 기기에서 자동으로 통과) ──────
+const SITE_PIN = '8990'; // ← 원하는 숫자로 이 값만 바꾸시면 됩니다
+const SITE_AUTH_KEY = 'fleetSitePinOK_v1';
+function tryUnlock(){
+  const input = document.getElementById('lockPinInput');
+  const errEl = document.getElementById('lockErr');
+  if(input.value.trim() === SITE_PIN){
+    localStorage.setItem(SITE_AUTH_KEY, '1');
+    document.getElementById('lockScreen').style.display = 'none';
+    startApp();
+  }else{
+    errEl.textContent = '비밀번호가 틀렸어요';
+    input.value = '';
+    input.focus();
+  }
+}
+function checkSitePin(){
+  if(localStorage.getItem(SITE_AUTH_KEY) === '1'){
+    document.getElementById('lockScreen').style.display = 'none';
+    startApp();
+  }else{
+    document.getElementById('lockScreen').style.display = 'flex';
+    document.getElementById('lockPinInput').focus();
+  }
+}
 
 // ── 비밀번호 잠금 제거됨 (누구나 조회/수정 가능) ─────────────
 function ensureEditUnlocked(){
@@ -1932,7 +1999,7 @@ async function startApp(){
   await syncAllReturnSchedules();
 }
 
-startApp();
+checkSitePin();
 </script>
 </body>
 </html>
