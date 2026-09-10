@@ -17,11 +17,21 @@
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getDatabase, ref, get, onValue, set, update, push, remove } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
+  const auth = getAuth(app);
   window._fb = { ref, get, onValue, set, update, push, remove, db };
-  window._fbReady = true;
-  window.dispatchEvent(new Event('fb-ready'));
+  // 익명 로그인 후에만 fb-ready 발생시킴 (index.html과 동일한 방식)
+  onAuthStateChanged(auth, (user)=>{
+    if(user){
+      window._fbReady = true;
+      window.dispatchEvent(new Event('fb-ready'));
+    }
+  });
+  signInAnonymously(auth).catch((err)=>{
+    console.error('익명 로그인 실패', err);
+  });
 </script>
 <style>
   :root {
