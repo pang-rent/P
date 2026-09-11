@@ -91,7 +91,7 @@
   @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.3;} }
 
   .stats {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
     margin-bottom: 22px;
   }
   .stat {
@@ -103,6 +103,7 @@
   .stat.amber .num { color: var(--amber); }
   .stat.red .num { color: var(--red); }
   .stat.green .num { color: var(--green); }
+  .stat.active{ border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
 
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
   .toolbar h2 { font-size: 14px; color: var(--text-dim); font-weight: 500; margin: 0; }
@@ -252,13 +253,39 @@
   .subhead:first-of-type { margin-top: 4px; }
 
   @media (max-width: 480px) {
-    .stats { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .stats { grid-template-columns: 1fr 1fr; gap: 8px; }
     .stat { padding: 10px; }
     .stat .num { font-size: 19px; }
   }
+  .lock-screen{
+    position:fixed;inset:0;background:var(--bg);z-index:999;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:24px;gap:14px;text-align:center;
+  }
+  .lock-screen .lock-icon{font-size:34px;}
+  .lock-screen h2{margin:0;font-size:17px;}
+  .lock-screen p{margin:0;color:var(--text-dim);font-size:12.5px;}
+  .lock-screen input{
+    width:220px;max-width:80%;text-align:center;letter-spacing:6px;font-size:18px;
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:12px;margin-top:6px;
+  }
+  .lock-screen button{
+    width:220px;max-width:80%;padding:12px;border-radius:10px;border:none;
+    background:var(--amber);color:#1a1300;font-weight:700;font-size:14px;
+  }
+  .lock-screen .lock-err{color:var(--red);font-size:12px;min-height:16px;}
 </style>
 </head>
 <body>
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-icon">🔒</div>
+  <h2>결제일 알림 대시보드</h2>
+  <p>비밀번호를 입력하면 이 기기에서는 계속 자동으로 열려요</p>
+  <input type="password" inputmode="numeric" id="lockPinInput" placeholder="비밀번호" onkeydown="if(event.key==='Enter')tryUnlock()">
+  <button onclick="tryUnlock()">확인</button>
+  <div class="lock-err" id="lockErr"></div>
+</div>
 <div class="wrap">
 
   <header class="top">
@@ -275,23 +302,28 @@
   </header>
 
   <div class="stats">
-    <div class="stat">
+    <div class="stat" id="statTotalCard" style="cursor:pointer;">
       <div class="num" id="statTotal">0</div>
       <div class="label">장기 차량</div>
     </div>
-    <div class="stat amber">
+    <div class="stat amber" id="statDueCard" style="cursor:pointer;">
       <div class="num" id="statDue">0</div>
       <div class="label">임박 (D-3 이내)</div>
     </div>
-    <div class="stat green">
+    <div class="stat green" id="statSentCard" style="cursor:pointer;">
       <div class="num" id="statSent">0</div>
       <div class="label">이번 달 발송완료</div>
+    </div>
+    <div class="stat" id="statUnbilledCard" style="cursor:pointer;">
+      <div class="num" id="statUnbilled">0</div>
+      <div class="label">청구 미완료 (회수됨)</div>
     </div>
   </div>
 
   <div class="toolbar">
     <h2>결제 대상 고객</h2>
     <div style="display:flex; gap:8px;">
+      <button class="btn" id="returnLogBtn">회수 기록</button>
       <button class="btn" id="logBtn">발송 기록</button>
       <button class="btn" id="templateBtn">메시지 · 계좌 설정</button>
     </div>
@@ -364,6 +396,18 @@
   </div>
 </div>
 
+<!-- Return log modal -->
+<div class="overlay" id="returnLogOverlay">
+  <div class="modal">
+    <h3>회수 기록</h3>
+    <div class="hint" style="margin-bottom:12px;">현황판에서 반납일을 지워 회수 처리된 차량 목록입니다. 마지막 청구(결제)를 처리했으면 체크해두세요.</div>
+    <div id="returnLogList"></div>
+    <div class="modal-actions">
+      <button class="btn primary" id="returnLogCloseBtn">닫기</button>
+    </div>
+  </div>
+</div>
+
 <!-- Send log modal -->
 <div class="overlay" id="logOverlay">
   <div class="modal">
@@ -415,6 +459,7 @@
   let accounts = JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS));
   let openRowId = null;
   let editingPlate = null;
+  let statFilter = null; // null | 'due' | 'sent'
 
   const $ = (id) => document.getElementById(id);
   const pad = (n) => String(n).padStart(2, "0");
@@ -553,6 +598,12 @@
       return s === "amber" || s === "red";
     }).length;
     $("statSent").textContent = longTerm.filter(v => ovr(v.plate).lastSentMonth === t.ym).length;
+    const unbilledCount = Object.values(returnLog || {}).filter(s => s.auto && s.done && !s.billed).length;
+    $("statUnbilled").textContent = unbilledCount;
+    $("statUnbilledCard").classList.toggle("red", unbilledCount > 0);
+    $("statTotalCard").classList.toggle("active", statFilter === null);
+    $("statDueCard").classList.toggle("active", statFilter === "due");
+    $("statSentCard").classList.toggle("active", statFilter === "sent");
 
     const list = $("list");
     const empty = $("emptyState");
@@ -563,7 +614,18 @@
     }
     empty.style.display = "none";
 
-    const sorted = [...longTerm].sort((a, b) => {
+    let filtered = longTerm;
+    if (statFilter === "due") {
+      filtered = longTerm.filter(v => { const s = statusFor(v); return s === "amber" || s === "red"; });
+    } else if (statFilter === "sent") {
+      filtered = longTerm.filter(v => ovr(v.plate).lastSentMonth === t.ym);
+    }
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="empty">해당하는 차량이 없습니다</div>';
+      return;
+    }
+
+    const sorted = [...filtered].sort((a, b) => {
       const da = a.payDay ? daysUntil(a.payDay) : 999;
       const db = b.payDay ? daysUntil(b.payDay) : 999;
       return da - db;
@@ -793,6 +855,65 @@
   $("autoInfoBtn").addEventListener("click", () => $("infoOverlay").classList.add("open"));
   $("infoCloseBtn").addEventListener("click", () => $("infoOverlay").classList.remove("open"));
 
+  // return log modal (회수 기록 — auto-completed 반납 schedules from index.html)
+  let returnLog = {};
+  function renderReturnLog() {
+    const el = $("returnLogList");
+    const list = Object.entries(returnLog)
+      .filter(([, s]) => s.auto && s.done)
+      .sort((a, b) => (b[1].doneAt || "").localeCompare(a[1].doneAt || ""));
+    if (list.length === 0) {
+      el.innerHTML = '<div class="log-empty">아직 회수 기록이 없습니다.</div>';
+      return;
+    }
+    el.innerHTML = list.map(([key, s]) => {
+      const billed = !!s.billed;
+      const doneAt = s.doneAt ? (() => {
+        const d = new Date(s.doneAt);
+        return `${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      })() : "기록 없음";
+      const billedAt = billed && s.billedAt ? (() => {
+        const d = new Date(s.billedAt);
+        return `${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      })() : "";
+      return `
+        <div class="log-entry">
+          <div class="log-head">
+            <span class="log-name">${escapeHtml(s.plate || s.title || "-")}</span>
+            <span class="log-time">회수 ${doneAt}</span>
+          </div>
+          <div class="log-msg" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <span>${billed ? `<span style="color:var(--green);">청구 완료 · ${billedAt}</span>` : "청구 대기"}</span>
+            <label class="switch">
+              <input type="checkbox" data-billed="${key}" ${billed ? "checked" : ""}>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>`;
+    }).join("");
+  }
+  $("returnLogBtn").addEventListener("click", () => {
+    renderReturnLog();
+    $("returnLogOverlay").classList.add("open");
+  });
+  $("returnLogCloseBtn").addEventListener("click", () => $("returnLogOverlay").classList.remove("open"));
+  $("statUnbilledCard").addEventListener("click", () => {
+    renderReturnLog();
+    $("returnLogOverlay").classList.add("open");
+  });
+  $("statTotalCard").addEventListener("click", () => { statFilter = null; render(); });
+  $("statDueCard").addEventListener("click", () => { statFilter = statFilter === "due" ? null : "due"; render(); });
+  $("statSentCard").addEventListener("click", () => { statFilter = statFilter === "sent" ? null : "sent"; render(); });
+  $("returnLogList").addEventListener("change", async (e) => {
+    const box = e.target.closest("[data-billed]");
+    if (!box) return;
+    const key = box.dataset.billed;
+    const { ref, update, db } = window._fb;
+    const next = box.checked;
+    await update(ref(db, `schedules/${key}`), { billed: next, billedAt: next ? new Date().toISOString() : null });
+    render();
+  });
+
   // send log modal
   function renderLog() {
     const el = $("logList");
@@ -856,6 +977,7 @@
     onValue(ref(db, "payment-settings"), (snap) => { applySettings(snap.val()); render(); });
     onValue(ref(db, "payment-overrides"), (snap) => { applyOverrides(snap.val()); render(); });
     onValue(ref(db, "payment-sendlog"), (snap) => { applySendLog(snap.val()); if ($("logOverlay").classList.contains("open")) renderLog(); });
+    onValue(ref(db, "schedules"), (snap) => { returnLog = snap.exists() ? snap.val() : {}; render(); if ($("returnLogOverlay").classList.contains("open")) renderReturnLog(); });
     onValue(ref(db, "payment-autorun-status"), (snap) => {
       const s = snap.val();
       const tag = $("autoRunTag");
@@ -885,7 +1007,32 @@
     });
   }
 
-  init();
+  // ── 최초 1회 비밀번호 확인 (index.html과 동일한 PIN/저장키 공유) ──────
+  const SITE_PIN = '8990'; // ← index.html의 SITE_PIN과 항상 같은 값으로 맞춰주세요
+  const SITE_AUTH_KEY = 'fleetSitePinOK_v1';
+  window.tryUnlock = function(){
+    const input = document.getElementById('lockPinInput');
+    const errEl = document.getElementById('lockErr');
+    if(input.value.trim() === SITE_PIN){
+      localStorage.setItem(SITE_AUTH_KEY, '1');
+      document.getElementById('lockScreen').style.display = 'none';
+      init();
+    }else{
+      errEl.textContent = '비밀번호가 틀렸어요';
+      input.value = '';
+      input.focus();
+    }
+  };
+  function checkSitePin(){
+    if(localStorage.getItem(SITE_AUTH_KEY) === '1'){
+      document.getElementById('lockScreen').style.display = 'none';
+      init();
+    }else{
+      document.getElementById('lockScreen').style.display = 'flex';
+      document.getElementById('lockPinInput').focus();
+    }
+  }
+  checkSitePin();
 })();
 </script>
 </body>

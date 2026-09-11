@@ -43,12 +43,12 @@
     appId: "1:390123603041:web:35bbc4059db12d586e5620"
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-  import { getDatabase, ref, get, set, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+  import { getDatabase, ref, get, set, update, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const auth = getAuth(app);
-  window._fb = { ref, get, set, onValue, push, remove, db };
+  window._fb = { ref, get, set, update, onValue, push, remove, db };
   // 익명 로그인 후에만 fb-ready 발생시킴 → 아래 Realtime Database 규칙을
   // "auth != null" 로 바꾸면, URL/API키만으로는 접근 못하고 이 페이지를
   // 거쳐야만(=로그인 절차를 통과해야만) 데이터를 읽고 쓸 수 있게 됨.
@@ -302,6 +302,8 @@
   }
   .sched-item.today{ background:rgba(245,166,35,.14); border:1px solid var(--amber); color:var(--amber); }
   .sched-item.tomorrow{ background:rgba(91,157,255,.12); border:1px solid var(--blue); color:var(--blue); }
+  .sched-item.unbilled{ background:rgba(248,113,113,.14); border:1px solid var(--red); color:var(--red); cursor:pointer; }
+  .sched-item.unbilled .sched-tag{ background:var(--red); color:#2a0d0d; }
   .sched-item .sched-tag{
     font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; flex-shrink:0;
   }
@@ -1119,6 +1121,12 @@ function tomorrowStr(){
   d.setDate(d.getDate()+1);
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 }
+function fmtDoneAt(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return '';
+  return `${pad2(d.getMonth()+1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
 function matchesDate(sched, dateStr){
   if(sched.repeat){
     const day = Number(dateStr.split('-')[2]);
@@ -1159,12 +1167,14 @@ function isScheduleDone(sched, dateStr){
 async function toggleScheduleDone(key, dateStr){
   const sched = schedules[key];
   if(!sched) return;
-  const { ref, set, db } = window._fb;
+  const { ref, set, update, db } = window._fb;
   if(sched.repeat){
     const cur = !!(sched.completedDates && sched.completedDates[dateStr]);
-    await set(ref(db, `schedules/${key}/completedDates/${dateStr}`), cur ? null : true);
+    // 완료 시각을 날짜별로 기록 (취소 시엔 null)
+    await set(ref(db, `schedules/${key}/completedDates/${dateStr}`), cur ? null : new Date().toISOString());
   }else{
-    await set(ref(db, `schedules/${key}/done`), !sched.done);
+    const next = !sched.done;
+    await update(ref(db, `schedules/${key}`), { done: next, doneAt: next ? new Date().toISOString() : null });
   }
 }
 
@@ -1175,11 +1185,15 @@ function renderSchedBanner(){
   const tomorrow = tomorrowStr();
   const hour = new Date().getHours();
 
+  const unbilledCount = list.filter(s => s.auto && s.done && !s.billed).length;
   const todayItems = list.filter(s => matchesDate(s, today) && !isScheduleDone(s, today));
   const showTomorrow = hour >= 18; // 저녁 6시 이후부터 내일 일정 미리 표시
   const tomorrowItems = showTomorrow ? list.filter(s => matchesDate(s, tomorrow) && !isScheduleDone(s, tomorrow)) : [];
 
   let html = '';
+  if(unbilledCount > 0){
+    html += `<div class="sched-item unbilled" onclick="location.href='payment.html'"><span class="sched-tag">미청구</span><span class="sched-title">회수된 차량 중 미청구 차량이 ${unbilledCount}건 있습니다</span></div>`;
+  }
   todayItems.forEach(s=>{
     html += `<div class="sched-item today"><span class="sched-tag">오늘</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span></div>`;
   });
@@ -1770,13 +1784,15 @@ async function syncReturnSchedule(plate, oldDate, newDate){
         repeat: false,
         memo: '',
         auto: true,
-        done: false
+        plate: plate,
+        done: false,
+        doneAt: null
       });
     }
     // 날짜가 그대로면 완료 상태 등 기존 값을 건드리지 않음
   } else if(oldDate){
-    // 반납일을 지웠다 = 차량이 회수됨 → 삭제 대신 완료 처리해서 기록을 남김
-    await update(ref(db, 'schedules/'+key), { done: true });
+    // 반납일을 지웠다 = 차량이 회수됨 → 삭제 대신 완료 처리해서 기록을 남김 (회수시간 기록)
+    await update(ref(db, 'schedules/'+key), { done: true, doneAt: new Date().toISOString(), plate: plate });
   }
 }
 
