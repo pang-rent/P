@@ -180,6 +180,23 @@
   .log-entry .log-time { font-size: 11px; color: var(--text-dim); font-family: var(--mono); white-space: nowrap; }
   .log-entry .log-msg { font-size: 12px; color: var(--text-dim); line-height: 1.5; white-space: pre-wrap; }
   .log-empty { text-align: center; color: var(--text-dim); font-size: 13px; padding: 30px 0; }
+  .log-toolbar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .log-toolbar input {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--text);
+    border-radius: 5px; padding: 8px 10px; font-size: 13px; font-family: var(--sans);
+  }
+  .log-toolbar input:focus { outline: 1px solid var(--amber); border-color: var(--amber); }
+  .view-tabs { display: flex; gap: 6px; }
+  .view-tab {
+    flex: 1; background: var(--panel-hi); color: var(--text-dim); border: 1px solid var(--line);
+    border-radius: 5px; padding: 6px 8px; font-size: 12px; font-weight: 500;
+  }
+  .view-tab.active { background: var(--amber-dim); color: var(--amber); border-color: var(--amber-dim); font-weight: 700; }
+  .log-group-head {
+    font-size: 12px; font-weight: 700; color: var(--text-dim); margin: 14px 0 6px;
+    padding-bottom: 4px; border-bottom: 1px solid var(--line);
+  }
+  .log-group-head:first-child { margin-top: 0; }
   .acct-toggle {
     display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--text-dim);
   }
@@ -234,9 +251,27 @@
   .overlay.open { display: flex; }
   .modal {
     background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    width: 100%; max-width: 420px; padding: 20px; max-height: 88vh; overflow-y: auto;
+    width: 100%; max-width: 420px; max-height: 88vh;
+    display: flex; flex-direction: column; overflow: hidden;
   }
+  .modal-body { padding: 20px; overflow-y: auto; }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 16px 0 20px; flex-shrink: 0;
+  }
+  .modal-head h3 { margin: 0; }
+  .modal-x {
+    background: transparent; border: none; color: var(--text-dim); cursor: pointer;
+    width: 30px; height: 30px; border-radius: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1;
+  }
+  .modal-x:hover { background: var(--panel-hi); color: var(--text); }
   .modal h3 { margin: 0 0 16px; font-size: 16px; }
+  .modal-actions {
+    position: sticky; bottom: 0; background: var(--panel);
+    border-top: 1px solid var(--line); padding: 12px 20px; margin: 0 !important;
+    flex-shrink: 0;
+  }
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 5px; }
   .field input, .field textarea, .field select {
@@ -247,7 +282,7 @@
   .field input:focus, .field textarea:focus, .field select:focus { outline: 1px solid var(--amber); border-color: var(--amber); }
   .field-row { display: flex; gap: 10px; }
   .field-row .field { flex: 1; }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .hint { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
   .subhead { font-size: 12px; color: var(--amber); font-weight: 600; margin: 18px 0 8px; }
   .subhead:first-of-type { margin-top: 4px; }
@@ -346,7 +381,11 @@
 <!-- Template / accounts modal -->
 <div class="overlay" id="tmplOverlay">
   <div class="modal">
-    <h3>메시지 · 계좌 설정</h3>
+    <div class="modal-head">
+      <h3>메시지 · 계좌 설정</h3>
+      <button class="modal-x" id="tmplXBtn" aria-label="닫기">✕</button>
+    </div>
+    <div class="modal-body">
     <div class="field">
       <label>회사명</label>
       <input type="text" id="tmplCompany" placeholder="예: 팡팡렌트카">
@@ -389,6 +428,7 @@
       <textarea id="tmplText" style="min-height:110px;"></textarea>
       <div class="hint">{회사}, {이름}, {날짜}, {차량정보}, {계좌} 을 넣으면 자동으로 채워집니다.</div>
     </div>
+    </div>
     <div class="modal-actions">
       <button class="btn ghost" id="tmplCancelBtn">취소</button>
       <button class="btn primary" id="tmplSaveBtn">저장</button>
@@ -399,9 +439,25 @@
 <!-- Return log modal -->
 <div class="overlay" id="returnLogOverlay">
   <div class="modal">
-    <h3>회수 기록</h3>
+    <div class="modal-head">
+      <h3>회수 기록</h3>
+      <button class="modal-x" id="returnLogXBtn" aria-label="닫기">✕</button>
+    </div>
+    <div class="modal-body">
     <div class="hint" style="margin-bottom:12px;">현황판에서 반납일을 지워 회수 처리된 차량 목록입니다. 마지막 청구(결제)를 처리했으면 체크해두세요.</div>
+    <div class="log-toolbar">
+      <input type="text" id="returnLogSearch" placeholder="차량번호로 검색">
+      <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim);">
+        <input type="checkbox" id="returnLogUnbilledOnly" style="width:auto;"> 청구 미완료만 보기
+      </label>
+      <div class="view-tabs">
+        <button class="view-tab active" data-retview="all">전체</button>
+        <button class="view-tab" data-retview="date">일자별</button>
+        <button class="view-tab" data-retview="vehicle">차량별</button>
+      </div>
+    </div>
     <div id="returnLogList"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn primary" id="returnLogCloseBtn">닫기</button>
     </div>
@@ -411,9 +467,22 @@
 <!-- Send log modal -->
 <div class="overlay" id="logOverlay">
   <div class="modal">
-    <h3>발송 기록</h3>
-    <div class="hint" style="margin-bottom:12px;">'발송 완료로 표시'를 누른 시점에 실제로 만들어졌던 메시지가 그대로 남습니다.</div>
+    <div class="modal-head">
+      <h3>발송 기록</h3>
+      <button class="modal-x" id="logXBtn" aria-label="닫기">✕</button>
+    </div>
+    <div class="modal-body">
+    <div class="hint" style="margin-bottom:10px;">'발송 완료로 표시'를 누른 시점에 실제로 만들어졌던 메시지가 그대로 남습니다.</div>
+    <div class="log-toolbar">
+      <input type="text" id="logSearch" placeholder="이름 또는 차량번호 검색">
+      <div class="view-tabs">
+        <button class="view-tab active" data-logview="all">전체</button>
+        <button class="view-tab" data-logview="date">일자별</button>
+        <button class="view-tab" data-logview="vehicle">차량별</button>
+      </div>
+    </div>
     <div id="logList"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn ghost" id="logClearBtn" style="color:var(--red);">전체 삭제</button>
       <button class="btn primary" id="logCloseBtn">닫기</button>
@@ -424,7 +493,11 @@
 <!-- Auto-send info modal -->
 <div class="overlay" id="infoOverlay">
   <div class="modal">
-    <h3>자동발송 구성 안내</h3>
+    <div class="modal-head">
+      <h3>자동발송 구성 안내</h3>
+      <button class="modal-x" id="infoXBtn" aria-label="닫기">✕</button>
+    </div>
+    <div class="modal-body">
     <div style="font-size:13px; line-height:1.8; color:var(--text-dim);">
       이 대시보드는 Google Apps Script(구글 서버에서 매일 자동 실행)를 통해 모아샷 API로 실제 문자를 발송합니다.
       <br><br>
@@ -433,6 +506,7 @@
       · 발송 계정(아이디/비번/발신번호)은 이 화면이 아니라 Apps Script의 "스크립트 속성"에 별도로 저장되어 있어 외부에 노출되지 않습니다.<br>
       · 발송 결과는 상단의 "마지막 자동발송" 표시와 "발송 기록"에서 확인할 수 있습니다.<br><br>
       설정을 바꾸거나(발송 시점, 발신번호 등) 문제가 있으면 담당자에게 문의해주세요.
+    </div>
     </div>
     <div class="modal-actions">
       <button class="btn primary" id="infoCloseBtn">확인</button>
@@ -839,6 +913,7 @@
     $("tmplOverlay").classList.add("open");
   });
   $("tmplCancelBtn").addEventListener("click", () => $("tmplOverlay").classList.remove("open"));
+  $("tmplXBtn").addEventListener("click", () => $("tmplOverlay").classList.remove("open"));
   $("tmplSaveBtn").addEventListener("click", async () => {
     template = $("tmplText").value.trim() || DEFAULT_TEMPLATE;
     company = $("tmplCompany").value.trim() || DEFAULT_COMPANY;
@@ -854,50 +929,120 @@
   // info modal
   $("autoInfoBtn").addEventListener("click", () => $("infoOverlay").classList.add("open"));
   $("infoCloseBtn").addEventListener("click", () => $("infoOverlay").classList.remove("open"));
+  $("infoXBtn").addEventListener("click", () => $("infoOverlay").classList.remove("open"));
 
   // return log modal (회수 기록 — auto-completed 반납 schedules from index.html)
   let returnLog = {};
+  let retViewMode = "all"; // all | date | vehicle
+  let retSearchQuery = "";
+  let retUnbilledOnly = false;
+
+  function returnEntryHtml(key, s) {
+    const billed = !!s.billed;
+    const doneAt = s.doneAt ? (() => {
+      const d = new Date(s.doneAt);
+      return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    })() : "기록 없음";
+    const billedAt = billed && s.billedAt ? (() => {
+      const d = new Date(s.billedAt);
+      return `${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    })() : "";
+    return `
+      <div class="log-entry">
+        <div class="log-head">
+          <span class="log-name">${escapeHtml(s.plate || s.title || "-")}</span>
+          <span class="log-time">회수 ${doneAt}</span>
+        </div>
+        <div class="log-msg" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <span>${billed ? `<span style="color:var(--green);">청구 완료 · ${billedAt}</span>` : "청구 대기"}</span>
+          <label class="switch">
+            <input type="checkbox" data-billed="${key}" ${billed ? "checked" : ""}>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>`;
+  }
+
   function renderReturnLog() {
     const el = $("returnLogList");
-    const list = Object.entries(returnLog)
-      .filter(([, s]) => s.auto && s.done)
-      .sort((a, b) => (b[1].doneAt || "").localeCompare(a[1].doneAt || ""));
-    if (list.length === 0) {
+    const all = Object.entries(returnLog).filter(([, s]) => s.auto && s.done);
+    const q = retSearchQuery.trim().toLowerCase();
+    let list = q ? all.filter(([, s]) => (s.plate || "").toLowerCase().includes(q)) : all;
+    if (retUnbilledOnly) list = list.filter(([, s]) => !s.billed);
+    list = list.sort((a, b) => (b[1].doneAt || "").localeCompare(a[1].doneAt || ""));
+
+    if (all.length === 0) {
       el.innerHTML = '<div class="log-empty">아직 회수 기록이 없습니다.</div>';
       return;
     }
-    el.innerHTML = list.map(([key, s]) => {
-      const billed = !!s.billed;
-      const doneAt = s.doneAt ? (() => {
-        const d = new Date(s.doneAt);
-        return `${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      })() : "기록 없음";
-      const billedAt = billed && s.billedAt ? (() => {
-        const d = new Date(s.billedAt);
-        return `${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      })() : "";
-      return `
-        <div class="log-entry">
-          <div class="log-head">
-            <span class="log-name">${escapeHtml(s.plate || s.title || "-")}</span>
-            <span class="log-time">회수 ${doneAt}</span>
-          </div>
-          <div class="log-msg" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-            <span>${billed ? `<span style="color:var(--green);">청구 완료 · ${billedAt}</span>` : "청구 대기"}</span>
-            <label class="switch">
-              <input type="checkbox" data-billed="${key}" ${billed ? "checked" : ""}>
-              <span class="slider"></span>
-            </label>
-          </div>
-        </div>`;
-    }).join("");
+    if (list.length === 0) {
+      el.innerHTML = '<div class="log-empty">검색 결과가 없습니다.</div>';
+      return;
+    }
+
+    if (retViewMode === "date") {
+      const groups = {};
+      list.forEach(([key, s]) => {
+        const k = s.doneAt ? (() => { const d = new Date(s.doneAt); return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())}`; })() : "날짜 미상";
+        (groups[k] = groups[k] || []).push([key, s]);
+      });
+      const keys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+      el.innerHTML = keys.map(k => `
+        <div class="log-group-head">${k}</div>
+        ${groups[k].map(([key, s]) => returnEntryHtml(key, s)).join("")}
+      `).join("");
+    } else if (retViewMode === "vehicle") {
+      const groups = {};
+      list.forEach(([key, s]) => {
+        const k = s.plate || s.title || "차량번호 미상";
+        (groups[k] = groups[k] || []).push([key, s]);
+      });
+      const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b, "ko"));
+      el.innerHTML = keys.map(k => `
+        <div class="log-group-head">${escapeHtml(k)}</div>
+        ${groups[k].map(([key, s]) => returnEntryHtml(key, s)).join("")}
+      `).join("");
+    } else {
+      el.innerHTML = list.map(([key, s]) => returnEntryHtml(key, s)).join("");
+    }
   }
   $("returnLogBtn").addEventListener("click", () => {
+    retSearchQuery = "";
+    retUnbilledOnly = false;
+    $("returnLogSearch").value = "";
+    $("returnLogUnbilledOnly").checked = false;
     renderReturnLog();
     $("returnLogOverlay").classList.add("open");
   });
   $("returnLogCloseBtn").addEventListener("click", () => $("returnLogOverlay").classList.remove("open"));
+  $("returnLogXBtn").addEventListener("click", () => $("returnLogOverlay").classList.remove("open"));
+  $("returnLogSearch").addEventListener("input", (e) => {
+    retSearchQuery = e.target.value;
+    renderReturnLog();
+  });
+  $("returnLogUnbilledOnly").addEventListener("change", (e) => {
+    retUnbilledOnly = e.target.checked;
+    renderReturnLog();
+  });
+  document.querySelectorAll("#returnLogOverlay [data-retview]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      retViewMode = btn.dataset.retview;
+      document.querySelectorAll("#returnLogOverlay [data-retview]").forEach(b => b.classList.toggle("active", b === btn));
+      renderReturnLog();
+    });
+  });
+
+  // 배경(오버레이) 클릭 시 닫기 — 읽기전용 모달만 적용 (설정 입력폼은 실수로 닫히지 않도록 제외)
+  ["returnLogOverlay", "logOverlay", "infoOverlay"].forEach(id => {
+    $(id).addEventListener("click", (e) => {
+      if (e.target.id === id) $(id).classList.remove("open");
+    });
+  });
   $("statUnbilledCard").addEventListener("click", () => {
+    retSearchQuery = "";
+    retUnbilledOnly = true;
+    $("returnLogSearch").value = "";
+    $("returnLogUnbilledOnly").checked = true;
     renderReturnLog();
     $("returnLogOverlay").classList.add("open");
   });
@@ -915,39 +1060,96 @@
   });
 
   // send log modal
+  let logViewMode = "all"; // all | date | vehicle
+  let logSearchQuery = "";
+
+  function logEntryHtml(l) {
+    const d = new Date(l.sentAt);
+    const dateStr = `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const byTag = l.sentBy === "auto" ? "자동" : "수동";
+    const statusTag = l.success === false
+      ? `<span style="color:var(--red);">실패</span>`
+      : `<span style="color:var(--green);">성공</span>`;
+    return `
+      <div class="log-entry">
+        <div class="log-head">
+          <span class="log-name">${escapeHtml(l.name)} · ${escapeHtml(l.plate)} <span class="custom-tag" style="margin-left:4px;">${byTag}</span> ${statusTag}</span>
+          <span class="log-time">${dateStr}</span>
+        </div>
+        ${l.error ? `<div class="log-msg" style="color:var(--red);">오류: ${escapeHtml(l.error)}</div>` : ""}
+        <div class="log-msg">${escapeHtml(l.message)}</div>
+      </div>`;
+  }
+
   function renderLog() {
     const el = $("logList");
+    const q = logSearchQuery.trim().toLowerCase();
+    const filtered = q
+      ? sendLog.filter(l => (l.name || "").toLowerCase().includes(q) || (l.plate || "").toLowerCase().includes(q))
+      : sendLog;
+
     if (sendLog.length === 0) {
       el.innerHTML = '<div class="log-empty">아직 발송 기록이 없습니다.</div>';
       return;
     }
-    el.innerHTML = sendLog.map(l => {
-      const d = new Date(l.sentAt);
-      const dateStr = `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      const byTag = l.sentBy === "auto" ? "자동" : "수동";
-      const statusTag = l.success === false
-        ? `<span style="color:var(--red);">실패</span>`
-        : `<span style="color:var(--green);">성공</span>`;
-      return `
-        <div class="log-entry">
-          <div class="log-head">
-            <span class="log-name">${escapeHtml(l.name)} · ${escapeHtml(l.plate)} <span class="custom-tag" style="margin-left:4px;">${byTag}</span> ${statusTag}</span>
-            <span class="log-time">${dateStr}</span>
-          </div>
-          ${l.error ? `<div class="log-msg" style="color:var(--red);">오류: ${escapeHtml(l.error)}</div>` : ""}
-          <div class="log-msg">${escapeHtml(l.message)}</div>
-        </div>`;
-    }).join("");
+    if (filtered.length === 0) {
+      el.innerHTML = '<div class="log-empty">검색 결과가 없습니다.</div>';
+      return;
+    }
+
+    if (logViewMode === "date") {
+      const groups = {};
+      filtered.forEach(l => {
+        const d = new Date(l.sentAt);
+        const key = `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())}`;
+        (groups[key] = groups[key] || []).push(l);
+      });
+      const keys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+      el.innerHTML = keys.map(k => `
+        <div class="log-group-head">${k}</div>
+        ${groups[k].map(logEntryHtml).join("")}
+      `).join("");
+    } else if (logViewMode === "vehicle") {
+      const groups = {};
+      filtered.forEach(l => {
+        const key = l.plate || "차량번호 미상";
+        (groups[key] = groups[key] || []).push(l);
+      });
+      const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b, "ko"));
+      el.innerHTML = keys.map(k => {
+        const first = groups[k][0];
+        return `
+        <div class="log-group-head">${escapeHtml(k)} · ${escapeHtml(first.name || "이름 미등록")}</div>
+        ${groups[k].map(logEntryHtml).join("")}
+      `;
+      }).join("");
+    } else {
+      el.innerHTML = filtered.map(logEntryHtml).join("");
+    }
   }
   $("logBtn").addEventListener("click", () => {
+    logSearchQuery = "";
+    $("logSearch").value = "";
     renderLog();
     $("logOverlay").classList.add("open");
   });
   $("logCloseBtn").addEventListener("click", () => $("logOverlay").classList.remove("open"));
+  $("logXBtn").addEventListener("click", () => $("logOverlay").classList.remove("open"));
   $("logClearBtn").addEventListener("click", async () => {
     if (!confirm("발송 기록을 전체 삭제할까요? 되돌릴 수 없습니다.")) return;
     await clearLog();
     renderLog();
+  });
+  $("logSearch").addEventListener("input", (e) => {
+    logSearchQuery = e.target.value;
+    renderLog();
+  });
+  document.querySelectorAll("#logOverlay [data-logview]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      logViewMode = btn.dataset.logview;
+      document.querySelectorAll("#logOverlay [data-logview]").forEach(b => b.classList.toggle("active", b === btn));
+      renderLog();
+    });
   });
 
   function setSync(state, label) {
