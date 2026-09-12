@@ -1277,7 +1277,16 @@ function openSchedModal(){
   renderSchedList();
   document.getElementById('schedModalBg').classList.add('open');
 }
-function closeSchedModal(){
+async function closeSchedModal(){
+  // 추가/수정 폼이 열려있고 제목을 입력해둔 상태면, 저장 버튼을 안 눌렀어도
+  // 닫기를 누르는 순간 자동으로 저장해줍니다. (수정인 경우 addSchedule 안에서 확인창이 뜸)
+  const formOpen = document.getElementById('addFormFields').style.display !== 'none';
+  const title = document.getElementById('sTitle').value.trim();
+  if(formOpen && title){
+    const dateEl = document.getElementById('sDate');
+    if(!dateEl.value) dateEl.value = todayStr(); // 날짜를 안 채웠으면 오늘 날짜로 채워서 저장
+    await addSchedule();
+  }
   document.getElementById('schedModalBg').classList.remove('open');
 }
 
@@ -1285,6 +1294,11 @@ async function addSchedule(){
   const title = document.getElementById('sTitle').value.trim();
   const date = document.getElementById('sDate').value;
   if(!title || !date){ showToast('제목과 날짜를 입력해주세요'); return; }
+
+  if(editingScheduleKey){
+    if(!confirm(`"${title}" 일정을 수정할까요?`)) return;
+  }
+
   const { ref, push, set, db } = window._fb;
   const payload = {
     title, date,
