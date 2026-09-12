@@ -197,6 +197,36 @@
     padding-bottom: 4px; border-bottom: 1px solid var(--line);
   }
   .log-group-head:first-child { margin-top: 0; }
+  .mini-cal {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 12px 12px; margin-bottom: 12px;
+  }
+  .mini-cal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; font-weight: 600; margin-bottom: 8px;
+  }
+  .mini-cal-nav {
+    background: var(--panel-hi); color: var(--text); border: 1px solid var(--line);
+    border-radius: 4px; width: 26px; height: 26px; font-size: 14px; line-height: 1;
+  }
+  .mini-cal-nav:hover { background: #223154; }
+  .mini-cal-weekdays, .mini-cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
+  }
+  .mini-cal-weekdays span { font-size: 10.5px; color: var(--text-dim); padding: 2px 0 6px; }
+  .mini-cal-day {
+    position: relative; font-size: 12px; padding: 6px 0; border-radius: 5px; cursor: default;
+    color: var(--text-dim);
+  }
+  .mini-cal-day.empty { cursor: default; }
+  .mini-cal-day.has-entry { color: var(--text); cursor: pointer; font-weight: 600; }
+  .mini-cal-day.has-entry:hover { background: var(--panel-hi); }
+  .mini-cal-day.selected { background: var(--amber-dim); color: var(--amber); }
+  .mini-cal-dot {
+    display: block; width: 4px; height: 4px; border-radius: 50%; background: var(--amber);
+    margin: 2px auto 0;
+  }
+  .mini-cal-day.selected .mini-cal-dot { background: var(--amber); }
   .acct-toggle {
     display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--text-dim);
   }
@@ -450,12 +480,16 @@
       <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim);">
         <input type="checkbox" id="returnLogUnbilledOnly" style="width:auto;"> 청구 미완료만 보기
       </label>
-      <div class="view-tabs">
-        <button class="view-tab active" data-retview="all">전체</button>
-        <button class="view-tab" data-retview="date">일자별</button>
-        <button class="view-tab" data-retview="vehicle">차량별</button>
+      <div style="display:flex; gap:6px;">
+        <div class="view-tabs" style="flex:1;">
+          <button class="view-tab active" data-retview="all">전체</button>
+          <button class="view-tab" data-retview="date">일자별</button>
+          <button class="view-tab" data-retview="vehicle">차량별</button>
+        </div>
+        <button class="btn ghost" id="returnLogAddBtn" style="white-space:nowrap; padding:6px 10px; font-size:12px;">+ 수동등록</button>
       </div>
     </div>
+    <div id="returnLogCalendar" class="mini-cal" style="display:none;"></div>
     <div id="returnLogList"></div>
     </div>
     <div class="modal-actions">
@@ -481,6 +515,7 @@
         <button class="view-tab" data-logview="vehicle">차량별</button>
       </div>
     </div>
+    <div id="logCalendar" class="mini-cal" style="display:none;"></div>
     <div id="logList"></div>
     </div>
     <div class="modal-actions">
@@ -672,7 +707,7 @@
       return s === "amber" || s === "red";
     }).length;
     $("statSent").textContent = longTerm.filter(v => ovr(v.plate).lastSentMonth === t.ym).length;
-    const unbilledCount = Object.values(returnLog || {}).filter(s => s.auto && s.done && !s.billed).length;
+    const unbilledCount = Object.values(returnLog || {}).filter(s => (s.auto || s.manual) && s.done && !s.billed).length;
     $("statUnbilled").textContent = unbilledCount;
     $("statUnbilledCard").classList.toggle("red", unbilledCount > 0);
     $("statTotalCard").classList.toggle("active", statFilter === null);
@@ -781,6 +816,35 @@
 
   function escapeHtml(s) {
     return (s || "").toString().replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+  }
+
+  function dayKey(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+
+  function renderMiniCalendar(containerId, monthDate, dateSet, selectedKey, onPrev, onNext, onDayClick) {
+    const el = $(containerId);
+    const y = monthDate.getFullYear(), m = monthDate.getMonth();
+    const startWeekday = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    let cells = "";
+    for (let i = 0; i < startWeekday; i++) cells += `<div class="mini-cal-day empty"></div>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `${y}-${pad(m+1)}-${pad(d)}`;
+      const has = dateSet.has(key);
+      const sel = key === selectedKey;
+      cells += `<div class="mini-cal-day${has ? " has-entry" : ""}${sel ? " selected" : ""}"${has ? ` data-daykey="${key}"` : ""}>${d}${has ? '<span class="mini-cal-dot"></span>' : ""}</div>`;
+    }
+    el.innerHTML = `
+      <div class="mini-cal-head">
+        <button type="button" class="mini-cal-nav" data-calnav="prev">‹</button>
+        <span>${y}년 ${m + 1}월</span>
+        <button type="button" class="mini-cal-nav" data-calnav="next">›</button>
+      </div>
+      <div class="mini-cal-weekdays">${["일","월","화","수","목","금","토"].map(w => `<span>${w}</span>`).join("")}</div>
+      <div class="mini-cal-grid">${cells}</div>
+    `;
+    el.querySelector('[data-calnav="prev"]').addEventListener("click", onPrev);
+    el.querySelector('[data-calnav="next"]').addEventListener("click", onNext);
+    el.querySelectorAll("[data-daykey]").forEach(c => c.addEventListener("click", () => onDayClick(c.dataset.daykey)));
   }
 
   $("list").addEventListener("click", async (e) => {
@@ -936,6 +1000,8 @@
   let retViewMode = "all"; // all | date | vehicle
   let retSearchQuery = "";
   let retUnbilledOnly = false;
+  let retCalMonth = new Date();
+  let retSelectedDay = null; // 'YYYY-MM-DD'
 
   function returnEntryHtml(key, s) {
     const billed = !!s.billed;
@@ -965,24 +1031,42 @@
 
   function renderReturnLog() {
     const el = $("returnLogList");
-    const all = Object.entries(returnLog).filter(([, s]) => s.auto && s.done);
+    const cal = $("returnLogCalendar");
+    const all = Object.entries(returnLog).filter(([, s]) => (s.auto || s.manual) && s.done);
     const q = retSearchQuery.trim().toLowerCase();
     let list = q ? all.filter(([, s]) => (s.plate || "").toLowerCase().includes(q)) : all;
     if (retUnbilledOnly) list = list.filter(([, s]) => !s.billed);
     list = list.sort((a, b) => (b[1].doneAt || "").localeCompare(a[1].doneAt || ""));
 
     if (all.length === 0) {
+      cal.style.display = "none";
       el.innerHTML = '<div class="log-empty">아직 회수 기록이 없습니다.</div>';
       return;
     }
     if (list.length === 0) {
+      cal.style.display = retViewMode === "date" ? "block" : "none";
       el.innerHTML = '<div class="log-empty">검색 결과가 없습니다.</div>';
       return;
     }
 
     if (retViewMode === "date") {
+      cal.style.display = "block";
+      const dateSet = new Set(list.filter(([, s]) => s.doneAt).map(([, s]) => dayKey(new Date(s.doneAt))));
+      renderMiniCalendar("returnLogCalendar", retCalMonth, dateSet, retSelectedDay,
+        () => { retCalMonth = new Date(retCalMonth.getFullYear(), retCalMonth.getMonth() - 1, 1); renderReturnLog(); },
+        () => { retCalMonth = new Date(retCalMonth.getFullYear(), retCalMonth.getMonth() + 1, 1); renderReturnLog(); },
+        (key) => { retSelectedDay = retSelectedDay === key ? null : key; renderReturnLog(); }
+      );
+
+      const dayFiltered = retSelectedDay
+        ? list.filter(([, s]) => s.doneAt && dayKey(new Date(s.doneAt)) === retSelectedDay)
+        : list;
+      if (retSelectedDay && dayFiltered.length === 0) {
+        el.innerHTML = '<div class="log-empty">이 날짜에는 기록이 없습니다.</div>';
+        return;
+      }
       const groups = {};
-      list.forEach(([key, s]) => {
+      dayFiltered.forEach(([key, s]) => {
         const k = s.doneAt ? (() => { const d = new Date(s.doneAt); return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())}`; })() : "날짜 미상";
         (groups[k] = groups[k] || []).push([key, s]);
       });
@@ -992,6 +1076,7 @@
         ${groups[k].map(([key, s]) => returnEntryHtml(key, s)).join("")}
       `).join("");
     } else if (retViewMode === "vehicle") {
+      cal.style.display = "none";
       const groups = {};
       list.forEach(([key, s]) => {
         const k = s.plate || s.title || "차량번호 미상";
@@ -1003,12 +1088,15 @@
         ${groups[k].map(([key, s]) => returnEntryHtml(key, s)).join("")}
       `).join("");
     } else {
+      cal.style.display = "none";
       el.innerHTML = list.map(([key, s]) => returnEntryHtml(key, s)).join("");
     }
   }
   $("returnLogBtn").addEventListener("click", () => {
     retSearchQuery = "";
     retUnbilledOnly = false;
+    retSelectedDay = null;
+    retCalMonth = new Date();
     $("returnLogSearch").value = "";
     $("returnLogUnbilledOnly").checked = false;
     renderReturnLog();
@@ -1023,6 +1111,18 @@
   $("returnLogUnbilledOnly").addEventListener("change", (e) => {
     retUnbilledOnly = e.target.checked;
     renderReturnLog();
+  });
+  $("returnLogAddBtn").addEventListener("click", async () => {
+    const plate = prompt("반납 처리된 차량번호를 입력하세요.\n(텔레그램봇 등으로 현황판에서만 종결된 차량을 여기 청구 관리 목록에 추가합니다)");
+    if (!plate || !plate.trim()) return;
+    const { ref, push, db } = window._fb;
+    await push(ref(db, "schedules"), {
+      plate: plate.trim(),
+      done: true,
+      manual: true,
+      doneAt: new Date().toISOString(),
+      billed: false
+    });
   });
   document.querySelectorAll("#returnLogOverlay [data-retview]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -1041,6 +1141,8 @@
   $("statUnbilledCard").addEventListener("click", () => {
     retSearchQuery = "";
     retUnbilledOnly = true;
+    retSelectedDay = null;
+    retCalMonth = new Date();
     $("returnLogSearch").value = "";
     $("returnLogUnbilledOnly").checked = true;
     renderReturnLog();
@@ -1062,6 +1164,8 @@
   // send log modal
   let logViewMode = "all"; // all | date | vehicle
   let logSearchQuery = "";
+  let logCalMonth = new Date();
+  let logSelectedDay = null; // 'YYYY-MM-DD'
 
   function logEntryHtml(l) {
     const d = new Date(l.sentAt);
@@ -1083,23 +1187,39 @@
 
   function renderLog() {
     const el = $("logList");
+    const cal = $("logCalendar");
     const q = logSearchQuery.trim().toLowerCase();
     const filtered = q
       ? sendLog.filter(l => (l.name || "").toLowerCase().includes(q) || (l.plate || "").toLowerCase().includes(q))
       : sendLog;
 
     if (sendLog.length === 0) {
+      cal.style.display = "none";
       el.innerHTML = '<div class="log-empty">아직 발송 기록이 없습니다.</div>';
       return;
     }
     if (filtered.length === 0) {
+      cal.style.display = logViewMode === "date" ? "block" : "none";
       el.innerHTML = '<div class="log-empty">검색 결과가 없습니다.</div>';
       return;
     }
 
     if (logViewMode === "date") {
+      cal.style.display = "block";
+      const dateSet = new Set(filtered.map(l => dayKey(new Date(l.sentAt))));
+      renderMiniCalendar("logCalendar", logCalMonth, dateSet, logSelectedDay,
+        () => { logCalMonth = new Date(logCalMonth.getFullYear(), logCalMonth.getMonth() - 1, 1); renderLog(); },
+        () => { logCalMonth = new Date(logCalMonth.getFullYear(), logCalMonth.getMonth() + 1, 1); renderLog(); },
+        (key) => { logSelectedDay = logSelectedDay === key ? null : key; renderLog(); }
+      );
+
+      const dayFiltered = logSelectedDay ? filtered.filter(l => dayKey(new Date(l.sentAt)) === logSelectedDay) : filtered;
+      if (logSelectedDay && dayFiltered.length === 0) {
+        el.innerHTML = '<div class="log-empty">이 날짜에는 기록이 없습니다.</div>';
+        return;
+      }
       const groups = {};
-      filtered.forEach(l => {
+      dayFiltered.forEach(l => {
         const d = new Date(l.sentAt);
         const key = `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())}`;
         (groups[key] = groups[key] || []).push(l);
@@ -1110,6 +1230,7 @@
         ${groups[k].map(logEntryHtml).join("")}
       `).join("");
     } else if (logViewMode === "vehicle") {
+      cal.style.display = "none";
       const groups = {};
       filtered.forEach(l => {
         const key = l.plate || "차량번호 미상";
@@ -1124,11 +1245,14 @@
       `;
       }).join("");
     } else {
+      cal.style.display = "none";
       el.innerHTML = filtered.map(logEntryHtml).join("");
     }
   }
   $("logBtn").addEventListener("click", () => {
     logSearchQuery = "";
+    logSelectedDay = null;
+    logCalMonth = new Date();
     $("logSearch").value = "";
     renderLog();
     $("logOverlay").classList.add("open");
