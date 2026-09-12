@@ -17,20 +17,34 @@
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getDatabase, ref, get, onValue, set, update, push, remove } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const auth = getAuth(app);
-  window._fb = { ref, get, onValue, set, update, push, remove, db };
-  // 익명 로그인 후에만 fb-ready 발생시킴 (index.html과 동일한 방식)
+  window._fb = { ref, get, onValue, set, update, push, remove, db, auth, signInWithEmailAndPassword };
+
+  // index.html의 window._fbLoginEmail 과 반드시 동일하게 맞추세요
+  window._fbLoginEmail = 'jangseong-staff@pangpangrent-office.local';
+
+  setPersistence(auth, browserLocalPersistence).catch(()=>{});
+
+  // 로그인 성공 여부를 Realtime Database 규칙에서 "auth != null" 로 검사하면,
+  // 실제 계정으로 로그인해야만 데이터를 읽고 쓸 수 있게 됨 (index.html과 동일한 방식)
+  let appStarted = false;
   onAuthStateChanged(auth, (user)=>{
+    const lockScreen = document.getElementById('lockScreen');
     if(user){
       window._fbReady = true;
       window.dispatchEvent(new Event('fb-ready'));
+      if(lockScreen) lockScreen.style.display = 'none';
+      if(!appStarted && window.startPaymentApp){ appStarted = true; window.startPaymentApp(); }
+    }else{
+      if(lockScreen){
+        lockScreen.style.display = 'flex';
+        const pinInput = document.getElementById('lockPinInput');
+        if(pinInput) pinInput.focus();
+      }
     }
-  });
-  signInAnonymously(auth).catch((err)=>{
-    console.error('익명 로그인 실패', err);
   });
 </script>
 <style>
@@ -347,7 +361,7 @@
   <div class="lock-icon">🔒</div>
   <h2>결제일 알림 대시보드</h2>
   <p>비밀번호를 입력하면 이 기기에서는 계속 자동으로 열려요</p>
-  <input type="password" inputmode="numeric" id="lockPinInput" placeholder="비밀번호" onkeydown="if(event.key==='Enter')tryUnlock()">
+  <input type="password" id="lockPinInput" placeholder="비밀번호" onkeydown="if(event.key==='Enter')tryUnlock()">
   <button onclick="tryUnlock()">확인</button>
   <div class="lock-err" id="lockErr"></div>
 </div>
@@ -554,9 +568,11 @@
   const STORAGE_KEY = 'fleet-vehicles-jangseong-v1';
   const DEFAULT_TEMPLATE = "[{회사}]\n{이름}님, 안녕하세요.\n{차량정보} 장기렌터카 이용료 결제일은 {날짜}입니다.\n\n▪ 결제 계좌: {계좌}\n\n항상 이용해주셔서 감사합니다.";
   const DEFAULT_COMPANY = "팡팡렌트카";
+  // 실제 계좌번호는 코드에 두지 않고 Firebase(payment-settings)에만 저장됩니다.
+  // 최초 1회는 여기 빈 값으로 시딩되니, 로그인 후 설정 화면에서 입력해주세요.
   const DEFAULT_ACCOUNTS = {
-    corp: { bank: "농협", number: "301-0215-4589-81", holder: "" },
-    personal: { bank: "토스뱅크", number: "1002-2249-1660", holder: "" }
+    corp: { bank: "", number: "", holder: "" },
+    personal: { bank: "", number: "", holder: "" }
   };
 
   let vehicles = [];       // raw from firebase
@@ -1338,32 +1354,21 @@
     });
   }
 
-  // ── 최초 1회 비밀번호 확인 (index.html과 동일한 PIN/저장키 공유) ──────
-  const SITE_PIN = '8990'; // ← index.html의 SITE_PIN과 항상 같은 값으로 맞춰주세요
-  const SITE_AUTH_KEY = 'fleetSitePinOK_v1';
+  // ── 로그인 (Firebase 계정 비밀번호 확인, index.html과 동일한 계정 공유) ──────
+  // 로그인에 성공하면 Firebase가 이 브라우저에 세션을 저장해서, 다음부터는
+  // 자동으로 통과됩니다(모듈 스크립트의 onAuthStateChanged가 처리).
   window.tryUnlock = function(){
     const input = document.getElementById('lockPinInput');
     const errEl = document.getElementById('lockErr');
-    if(input.value.trim() === SITE_PIN){
-      localStorage.setItem(SITE_AUTH_KEY, '1');
-      document.getElementById('lockScreen').style.display = 'none';
-      init();
-    }else{
+    errEl.textContent = '';
+    const { auth, signInWithEmailAndPassword } = window._fb;
+    signInWithEmailAndPassword(auth, window._fbLoginEmail, input.value).catch(()=>{
       errEl.textContent = '비밀번호가 틀렸어요';
       input.value = '';
       input.focus();
-    }
+    });
   };
-  function checkSitePin(){
-    if(localStorage.getItem(SITE_AUTH_KEY) === '1'){
-      document.getElementById('lockScreen').style.display = 'none';
-      init();
-    }else{
-      document.getElementById('lockScreen').style.display = 'flex';
-      document.getElementById('lockPinInput').focus();
-    }
-  }
-  checkSitePin();
+  window.startPaymentApp = init;
 })();
 </script>
 </body>

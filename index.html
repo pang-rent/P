@@ -44,22 +44,36 @@
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getDatabase, ref, get, set, update, onValue, push, remove, runTransaction } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const auth = getAuth(app);
-  window._fb = { ref, get, set, update, onValue, push, remove, runTransaction, db };
-  // 익명 로그인 후에만 fb-ready 발생시킴 → 아래 Realtime Database 규칙을
-  // "auth != null" 로 바꾸면, URL/API키만으로는 접근 못하고 이 페이지를
-  // 거쳐야만(=로그인 절차를 통과해야만) 데이터를 읽고 쓸 수 있게 됨.
+  window._fb = { ref, get, set, update, onValue, push, remove, runTransaction, db, auth, signInWithEmailAndPassword };
+
+  // Firebase 콘솔 > Authentication > Users 에서 이 이메일로 계정을 하나 만들고,
+  // 그 계정의 비밀번호가 곧 사무실 로그인 비밀번호가 됩니다. (payment.html과 반드시 동일하게 맞추세요)
+  window._fbLoginEmail = 'jangseong-staff@pangpangrent-office.local';
+
+  setPersistence(auth, browserLocalPersistence).catch(()=>{});
+
+  // 로그인 성공 여부를 Realtime Database 규칙에서 "auth != null" 로 검사하면,
+  // URL/API키만으로는 접근 못하고 실제 계정으로 로그인해야만 데이터를 읽고 쓸 수 있게 됨.
+  // (한 번 로그인하면 이 브라우저에는 세션이 저장되어 다음부터는 자동으로 통과됨)
+  let appStarted = false;
   onAuthStateChanged(auth, (user)=>{
+    const lockScreen = document.getElementById('lockScreen');
     if(user){
       window._fbReady = true;
       window.dispatchEvent(new Event('fb-ready'));
+      if(lockScreen) lockScreen.style.display = 'none';
+      if(!appStarted){ appStarted = true; startApp(); }
+    }else{
+      if(lockScreen){
+        lockScreen.style.display = 'flex';
+        const pinInput = document.getElementById('lockPinInput');
+        if(pinInput) pinInput.focus();
+      }
     }
-  });
-  signInAnonymously(auth).catch((err)=>{
-    console.error('익명 로그인 실패', err);
   });
 </script>
 <style>
@@ -381,7 +395,7 @@
   <div class="lock-icon">🔒</div>
   <h2>장성영업소 차량 현황판</h2>
   <p>비밀번호를 입력하면 이 기기에서는 계속 자동으로 열려요</p>
-  <input type="password" inputmode="numeric" id="lockPinInput" placeholder="비밀번호" onkeydown="if(event.key==='Enter')tryUnlock()">
+  <input type="password" id="lockPinInput" placeholder="비밀번호" onkeydown="if(event.key==='Enter')tryUnlock()">
   <button onclick="tryUnlock()">확인</button>
   <div class="lock-err" id="lockErr"></div>
 </div>
@@ -714,30 +728,19 @@
 <script>
 const STORAGE_KEY = 'fleet-vehicles-jangseong-v1';
 
-// ── 최초 1회 비밀번호 확인 (이후엔 이 기기에서 자동으로 통과) ──────
-const SITE_PIN = '8990'; // ← 원하는 숫자로 이 값만 바꾸시면 됩니다
-const SITE_AUTH_KEY = 'fleetSitePinOK_v1';
+// ── 로그인 (Firebase 계정 비밀번호 확인) ─────────────────────
+// 로그인에 성공하면 Firebase가 이 브라우저에 세션을 저장해서, 다음부터는
+// 자동으로 통과됩니다(=onAuthStateChanged가 즉시 로그인 상태로 알려줌).
 function tryUnlock(){
   const input = document.getElementById('lockPinInput');
   const errEl = document.getElementById('lockErr');
-  if(input.value.trim() === SITE_PIN){
-    localStorage.setItem(SITE_AUTH_KEY, '1');
-    document.getElementById('lockScreen').style.display = 'none';
-    startApp();
-  }else{
+  errEl.textContent = '';
+  const { auth, signInWithEmailAndPassword } = window._fb;
+  signInWithEmailAndPassword(auth, window._fbLoginEmail, input.value).catch(()=>{
     errEl.textContent = '비밀번호가 틀렸어요';
     input.value = '';
     input.focus();
-  }
-}
-function checkSitePin(){
-  if(localStorage.getItem(SITE_AUTH_KEY) === '1'){
-    document.getElementById('lockScreen').style.display = 'none';
-    startApp();
-  }else{
-    document.getElementById('lockScreen').style.display = 'flex';
-    document.getElementById('lockPinInput').focus();
-  }
+  });
 }
 
 // ── 비밀번호 잠금 제거됨 (누구나 조회/수정 가능) ─────────────
@@ -2060,7 +2063,6 @@ async function startApp(){
   await syncAllReturnSchedules();
 }
 
-checkSitePin();
 </script>
 </body>
 </html>
