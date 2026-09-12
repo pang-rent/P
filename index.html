@@ -43,12 +43,12 @@
     appId: "1:390123603041:web:35bbc4059db12d586e5620"
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-  import { getDatabase, ref, get, set, update, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+  import { getDatabase, ref, get, set, update, onValue, push, remove, runTransaction } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const auth = getAuth(app);
-  window._fb = { ref, get, set, update, onValue, push, remove, db };
+  window._fb = { ref, get, set, update, onValue, push, remove, runTransaction, db };
   // 익명 로그인 후에만 fb-ready 발생시킴 → 아래 Realtime Database 규칙을
   // "auth != null" 로 바꾸면, URL/API키만으로는 접근 못하고 이 페이지를
   // 거쳐야만(=로그인 절차를 통과해야만) 데이터를 읽고 쓸 수 있게 됨.
@@ -300,8 +300,8 @@
     display:flex; align-items:center; gap:8px; border-radius:9px; padding:8px 12px;
     font-size:12.5px; line-height:1.4;
   }
-  .sched-item.today{ background:rgba(245,166,35,.14); border:1px solid var(--amber); color:var(--amber); }
-  .sched-item.tomorrow{ background:rgba(91,157,255,.12); border:1px solid var(--blue); color:var(--blue); }
+  .sched-item.today{ background:rgba(245,166,35,.14); border:1px solid var(--amber); color:var(--amber); cursor:pointer; }
+  .sched-item.tomorrow{ background:rgba(91,157,255,.12); border:1px solid var(--blue); color:var(--blue); cursor:pointer; }
   .sched-item.unbilled{ background:rgba(248,113,113,.14); border:1px solid var(--red); color:var(--red); cursor:pointer; }
   .sched-item.unbilled .sched-tag{ background:var(--red); color:#2a0d0d; }
   .sched-item .sched-tag{
@@ -358,7 +358,7 @@
     border-radius:8px; font-size:12px; color:var(--text); cursor:pointer; background:var(--panel2);
     border:1px solid transparent;
   }
-  .cal-cell.empty{ background:none; cursor:default; }
+  .cal-cell.blank{ background:none; cursor:default; }
   .cal-cell.today{ border-color:var(--amber); color:var(--amber); font-weight:700; }
   .cal-cell.selected{ background:var(--amber); color:#241c0a; font-weight:700; }
   .cal-cell .dot{
@@ -1034,17 +1034,9 @@ async function loadData(){
 }
 
 function autoFlagReturnDue(){
-  let changed = false;
-  vehicles.forEach(v=>{
-    if(v.returnDate && isReturnDue(v.returnDate)){
-      const note = v.note || '';
-      if(!note.includes('반납 임박')){
-        v.note = note ? `${note} / 반납 임박` : '반납 임박';
-        changed = true;
-      }
-    }
-  });
-  if(changed) persist();
+  // 반납일 도래 표시는 render()에서 배지(⏰ 반납일 도래)로만 계산해서 보여줍니다.
+  // 예전에는 여기서 비고(note)란에 "반납 임박" 문구를 직접 써넣고 자동 저장까지 했는데,
+  // 그러면 화면만 열어도 저장이 발생하고 반납 후에도 문구가 비고에 영구히 남는 문제가 있어 제거했습니다.
 }
 
 const HISTORY_KEY = 'history-jangseong-v1';
@@ -1076,14 +1068,40 @@ async function pruneHistory(){
   }
 }
 
-async function persist(){
-  const { ref, set, db } = window._fb;
+// change 인자를 넘기면(수정/추가/삭제 1건 또는 여러 건) 서버의 "현재" 배열에
+// 그 변경분만 트랜잭션으로 병합해서 씁니다. 이렇게 하면 다른 직원이 그 사이에
+// 다른 차량을 수정해서 저장했더라도 서로의 변경사항이 통째로 덮어써지지 않습니다.
+// change를 생략하면(과거 히스토리 복원 등 "전체를 이 상태로 되돌린다"가 목적일 때만)
+// 기존처럼 로컬 vehicles 배열 전체로 덮어씁니다.
+async function persist(change){
+  const { ref, set, runTransaction, db } = window._fb;
   try{
     _suppressNextRemote = true;
     await snapshotHistory(); // 덮어쓰기 전 이전 상태를 변경 기록에 먼저 남김
-    await set(ref(db, STORAGE_KEY), vehicles);
+    if(change){
+      const result = await runTransaction(ref(db, STORAGE_KEY), (current)=>{
+        let list = Array.isArray(current) ? current.slice() : [];
+        const upsert = (v)=>{
+          const idx = list.findIndex(x=>x && x.plate===v.plate);
+          if(idx>=0) list[idx] = v; else list.push(v);
+        };
+        if(change.type==='upsert'){
+          upsert(change.vehicle);
+        }else if(change.type==='upsert-many'){
+          change.vehicles.forEach(upsert);
+        }else if(change.type==='delete'){
+          list = list.filter(x=>x && x.plate!==change.plate);
+        }
+        return list;
+      });
+      vehicles = (result.snapshot.val()) || [];
+      render();
+    }else{
+      await set(ref(db, STORAGE_KEY), vehicles);
+    }
     showToast('저장됨 · 다른 직원 화면에도 실시간 반영됩니다');
   }catch(e){
+    console.error(e);
     showToast('저장 실패 - 다시 시도해주세요');
   }
 }
@@ -1195,12 +1213,18 @@ function renderSchedBanner(){
     html += `<div class="sched-item unbilled" onclick="location.href='payment.html'"><span class="sched-tag">미청구</span><span class="sched-title">회수된 차량 중 미청구 차량이 ${unbilledCount}건 있습니다</span></div>`;
   }
   todayItems.forEach(s=>{
-    html += `<div class="sched-item today"><span class="sched-tag">오늘</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span></div>`;
+    html += `<div class="sched-item today" onclick="openSchedModalOnDate('${today}')"><span class="sched-tag">오늘</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span></div>`;
   });
   tomorrowItems.forEach(s=>{
-    html += `<div class="sched-item tomorrow"><span class="sched-tag">내일</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span></div>`;
+    html += `<div class="sched-item tomorrow" onclick="openSchedModalOnDate('${tomorrow}')"><span class="sched-tag">내일</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span></div>`;
   });
   el.innerHTML = html;
+}
+
+// 오늘/내일 일정 배너를 눌렀을 때 그 날짜가 선택된 상태로 일정 화면을 엽니다.
+function openSchedModalOnDate(dateStr){
+  openSchedModal();
+  calSelectDate(dateStr);
 }
 
 function escapeHtml(s){
@@ -1341,7 +1365,7 @@ function renderCalendar(){
   const today = todayStr();
 
   let html = '';
-  for(let i=0;i<firstDow;i++) html += `<div class="cal-cell empty"></div>`;
+  for(let i=0;i<firstDow;i++) html += `<div class="cal-cell blank"></div>`;
   for(let d=1; d<=daysInMonth; d++){
     const dateStr = `${calYear}-${pad2(calMonth+1)}-${pad2(d)}`;
     let cls = 'cal-cell';
@@ -1486,35 +1510,41 @@ function render(){
       const soon = (!due && v.returnDate) ? isReturnSoon(v.returnDate) : false;
       const cardExtraClass = due ? ' return-alert' : (soon ? ' return-soon-alert' : '');
       return `
-        <div class="card ${sc}${cardExtraClass}"
-          onclick="handleCardClick(event,'${v.plate}')"
-          onpointerdown="startPressHold(event,'${v.plate}')"
-          onpointerup="cancelPressHold(event)"
-          onpointerleave="cancelPressHold(event)"
-          onpointercancel="cancelPressHold(event)">
+        <div class="card ${sc}${cardExtraClass}" data-plate="${escapeHtml(v.plate)}">
           <span class="press-fill"></span>
           <div class="cbody">
             <div class="row1">
-              <span class="plate-tag plate">${v.plate}</span>
-              ${v.type?`<span class="type-badge tp-${v.type}">${v.type}</span>`:''}
-              <span class="badge ${sc}">${statusLabel(v)}</span>
+              <span class="plate-tag plate">${escapeHtml(v.plate)}</span>
+              ${v.type?`<span class="type-badge tp-${v.type}">${escapeHtml(v.type)}</span>`:''}
+              <span class="badge ${sc}">${escapeHtml(statusLabel(v))}</span>
               ${due?`<span class="badge return-due">⏰ 반납일 도래</span>`:''}
               ${soon?`<span class="badge return-soon">🔔 반납임박</span>`:''}
               ${insuranceBadge(v)}
               ${ageExpireBadge(v)}
             </div>
-            <div class="model">${v.cls} · ${v.model}${v.fuel?' · '+v.fuel:''}</div>
-            ${v.note?`<div class="note">${v.note}</div>`:''}
-            ${v.extra?`<div class="extra">${v.extra}</div>`:''}
+            <div class="model">${escapeHtml(v.cls)} · ${escapeHtml(v.model)}${v.fuel?' · '+escapeHtml(v.fuel):''}</div>
+            ${v.note?`<div class="note">${escapeHtml(v.note)}</div>`:''}
+            ${v.extra?`<div class="extra">${escapeHtml(v.extra)}</div>`:''}
             ${v.returnDate?`<div class="extra${due?' return-due':(soon?' return-soon':'')}">반납일자: ${formatReturnDate(v.returnDate)}</div>`:''}
             ${renderAsLine(v)}
             ${renderInspectionLine(v)}
           </div>
-          ${v.amount?`<div class="amount">${v.customerName?`${v.customerName}<br>`:''}${v.amount}만원${v.payDay?`<br>매월 ${v.payDay}일`:''}</div>`:''}
+          ${v.amount?`<div class="amount">${v.customerName?`${escapeHtml(v.customerName)}<br>`:''}${escapeHtml(String(v.amount))}만원${v.payDay?`<br>매월 ${escapeHtml(String(v.payDay))}일`:''}</div>`:''}
         </div>`;
     }).join('');
-    return `<div class="section-title"><span>${branch}</span><span>${items.length}대</span></div>${cards}`;
+    return `<div class="section-title"><span>${escapeHtml(branch)}</span><span>${items.length}대</span></div>${cards}`;
   }).join('');
+
+  // 카드 클릭/길게 누르기 이벤트는 인라인 onclick 대신 위임 방식으로 붙입니다.
+  // (번호판/비고 등에 따옴표가 들어가도 HTML 구조가 깨지지 않도록)
+  main.querySelectorAll('.card').forEach(card=>{
+    const plate = card.dataset.plate;
+    card.addEventListener('click', (e)=>handleCardClick(e, plate));
+    card.addEventListener('pointerdown', (e)=>startPressHold(e, plate));
+    card.addEventListener('pointerup', cancelPressHold);
+    card.addEventListener('pointerleave', cancelPressHold);
+    card.addEventListener('pointercancel', cancelPressHold);
+  });
 }
 
 let _pressTimer = null;
@@ -1840,7 +1870,7 @@ async function saveModal(){
   }
   closeModal();
   render();
-  await persist();
+  await persist({type:'upsert', vehicle: v});
   await syncReturnSchedule(v.plate, oldReturnDate, v.returnDate);
 }
 
@@ -1850,7 +1880,7 @@ async function deleteVehicle(){
   vehicles = vehicles.filter(x=>x.plate!==plate);
   closeModal();
   render();
-  await persist();
+  await persist({type:'delete', plate});
   const { ref, remove, db } = window._fb;
   await remove(ref(db, 'schedules/'+scheduleKeyForPlate(plate)));
   showToast('차량이 삭제되었습니다');
@@ -1905,7 +1935,7 @@ async function saveAddModal(){
     return;
   }
   const aBranch = document.getElementById('aBranch').value.trim() || '장성';
-  vehicles.push({
+  const newVehicle = {
     no:'+',
     plate,
     branch:aBranch,
@@ -1928,10 +1958,11 @@ async function saveAddModal(){
     ageExpireDate:document.getElementById('aAgeExpireDate').value || null,
     asYears:Number(document.getElementById('aAsYears').value) || AS_YEARS_DEFAULT,
     ageExtendCount:0
-  });
+  };
+  vehicles.push(newVehicle);
   closeAddModal();
   render();
-  await persist();
+  await persist({type:'upsert', vehicle: newVehicle});
   showToast('차량이 추가되었습니다');
 }
 
