@@ -13,14 +13,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="장성현황판">
 <script>
-  // 서비스워커 등록 (오프라인일 때도 화면이 뜨게 해줌, Firebase 실시간 데이터는 캐싱 안 함)
-  if('serviceWorker' in navigator){
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
-    });
-  }
-</script>
-<script>
   // 카카오톡 등 인앱브라우저에서 열렸으면 외부 브라우저(크롬/사파리)로 자동 이탈
   (function(){
     var ua = navigator.userAgent || '';
@@ -2182,13 +2174,6 @@ async function startApp(){
 }
 
 checkSitePin();
-</script>
-<script>
-  if('serviceWorker' in navigator){
-    window.addEventListener('load', ()=>{
-      navigator.serviceWorker.register('sw.js').catch(err=>console.error('서비스워커 등록 실패:', err));
-    });
-  }
 </script>
 </body>
 </html>
