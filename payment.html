@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>결제일 알림 대시보드</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="장성현황판">
 <script type="module">
   // 장성영업소 차량 현황판과 동일한 Firebase 프로젝트에 연결됩니다.
   const firebaseConfig = {
@@ -707,7 +714,12 @@
       return s === "amber" || s === "red";
     }).length;
     $("statSent").textContent = longTerm.filter(v => ovr(v.plate).lastSentMonth === t.ym).length;
-    const unbilledCount = Object.values(returnLog || {}).filter(s => (s.auto || s.manual) && s.done && !s.billed).length;
+    const unbilledCount = Object.values(returnLog || {}).filter(s => {
+      if(!((s.auto || s.manual) && s.done && !s.billed)) return false;
+      if(s.type) return s.type !== "일반";
+      const veh = vehicles.find(v => v.plate === s.plate);
+      return !(veh && veh.type === "일반");
+    }).length;
     $("statUnbilled").textContent = unbilledCount;
     $("statUnbilledCard").classList.toggle("red", unbilledCount > 0);
     $("statTotalCard").classList.toggle("active", statFilter === null);
@@ -1365,6 +1377,13 @@
   }
   checkSitePin();
 })();
+</script>
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(err=>console.error('서비스워커 등록 실패:', err));
+    });
+  }
 </script>
 </body>
 </html>

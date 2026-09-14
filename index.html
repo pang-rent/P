@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>장성영업소 차량 현황판</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="장성현황판">
 <script>
   // 카카오톡 등 인앱브라우저에서 열렸으면 외부 브라우저(크롬/사파리)로 자동 이탈
   (function(){
@@ -243,6 +250,13 @@
   }
   .modal h3{margin:0 0 2px;font-size:16px;}
   .modal .sub{color:var(--sub);font-size:12px;margin-bottom:14px;}
+  .modal-fixed-footer{
+    position:fixed;left:0;right:0;bottom:0;display:none;justify-content:center;
+    background:var(--panel);border-top:1px solid var(--line);z-index:51;
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+  .modal-bg.open .modal-fixed-footer{ display:flex; }
+  .modal-fixed-footer .btn-cancel{ width:100%;max-width:480px;padding:15px;font-size:15px;font-weight:700;border-radius:12px; }
   .field{margin-bottom:12px;}
   .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:5px;}
   .field input{
@@ -437,6 +451,10 @@
       <label>대여일 (입력하면 그날부터 자동으로 일수 카운팅)</label>
       <input id="mStartDate" type="date">
     </div>
+    <div class="field" id="mReturnDateField" style="display:none;">
+      <label>반납일자</label>
+      <input id="mReturnDate" type="date">
+    </div>
     <div class="field">
       <label>상태 (자동 일수 카운팅 중이 아닐 때 사용)</label>
       <input id="mStatus" placeholder="운행중">
@@ -458,6 +476,12 @@
       </label>
       <input id="mExtra" placeholder="예: 자차:o·26세·IMS관제" disabled>
     </div>
+    </div>
+    <div class="field" id="mDepositField" style="display:none;">
+      <label style="display:flex;align-items:center;gap:7px;">
+        <input type="checkbox" id="mDepositPaid" style="width:auto;" onchange="syncDepositUI('m')">
+        <span id="mDepositLabel" style="font-size:13px;color:var(--text);">입금완료 (체크 안 하면 미입금 상태로 표시돼요)</span>
+      </label>
     </div>
     <div class="accordion-header" onclick="toggleDocsSection()">
       <span>📋 보험 · 검사 · 차령 관리</span>
@@ -533,10 +557,6 @@
       <label>고객 전화번호</label>
       <input id="mCustomerPhone" placeholder="010-1234-5678">
     </div>
-    <div class="field" id="mReturnDateField" style="display:none;">
-      <label>반납일자</label>
-      <input id="mReturnDate" type="date">
-    </div>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">취소</button>
@@ -604,9 +624,9 @@
       </div>
     </div>
 
-    <div class="modal-actions" style="margin-top:14px;position:sticky;bottom:0;background:var(--panel);padding-top:8px;padding-bottom:4px;">
-      <button class="btn-cancel" style="width:100%;padding:15px;font-size:15px;font-weight:700;" onclick="closeSchedModal()">닫기</button>
-    </div>
+  </div>
+  <div class="modal-fixed-footer">
+    <button class="btn-cancel" onclick="closeSchedModal()">닫기</button>
   </div>
 </div>
 
@@ -1203,7 +1223,17 @@ function renderSchedBanner(){
   const tomorrow = tomorrowStr();
   const hour = new Date().getHours();
 
-  const unbilledCount = list.filter(s => s.auto && s.done && !s.billed).length;
+  // 일반 타입은 이제 차량 카드의 '입금완료' 체크박스로 직접 관리하므로,
+  // schedules 기반 '미청구' 집계에서는 제외합니다(대신 아래 '미입금' 배너로 대체).
+  // 스케줄에 저장된 당시 type을 우선 쓰고(회수 처리로 차량의 현재 type이 초기화된 뒤에도 정확히 판단됨),
+  // 예전에 만들어져 type이 없는 스케줄만 차량의 현재 type으로 보조 판단합니다.
+  const unbilledCount = list.filter(s => {
+    if(!(s.auto && s.done && !s.billed)) return false;
+    if(s.type) return s.type !== '일반';
+    const veh = vehicles.find(v=>v.plate===s.plate);
+    return !(veh && veh.type==='일반');
+  }).length;
+  const unpaidCount = vehicles.filter(v => v.type==='일반' && v.amount && !v.depositPaid).length;
   const todayItems = list.filter(s => matchesDate(s, today) && !isScheduleDone(s, today));
   const showTomorrow = hour >= 18; // 저녁 6시 이후부터 내일 일정 미리 표시
   const tomorrowItems = showTomorrow ? list.filter(s => matchesDate(s, tomorrow) && !isScheduleDone(s, tomorrow)) : [];
@@ -1211,6 +1241,9 @@ function renderSchedBanner(){
   let html = '';
   if(unbilledCount > 0){
     html += `<div class="sched-item unbilled" onclick="location.href='payment.html'"><span class="sched-tag">미청구</span><span class="sched-title">회수된 차량 중 미청구 차량이 ${unbilledCount}건 있습니다</span></div>`;
+  }
+  if(unpaidCount > 0){
+    html += `<div class="sched-item unbilled"><span class="sched-tag">미입금</span><span class="sched-title">일반 차량 중 미입금 차량이 ${unpaidCount}건 있습니다</span></div>`;
   }
   todayItems.forEach(s=>{
     html += `<div class="sched-item today" onclick="openSchedModalOnDate('${today}')"><span class="sched-tag">오늘</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span></div>`;
@@ -1230,6 +1263,25 @@ function openSchedModalOnDate(dateStr){
 function escapeHtml(s){
   return (s||'').toString().replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 }
+
+// ── 뒤로가기(브라우저/제스처)로 모달을 닫을 수 있게 처리 ──────────────
+// 모달을 열 때마다 히스토리를 하나 쌓아두고, 뒤로가기가 오면 페이지를 벗어나는
+// 대신 열려있는 모달만 닫히게 합니다. 앱 내 닫기/취소/저장 버튼으로 닫을 때도
+// 쌓아둔 히스토리를 같이 되돌려서 스택이 계속 쌓이지 않게 맞춰줍니다.
+const MODAL_IDS = ['modalBg','schedModalBg','addModalBg','historyModalBg'];
+function pushModalHistoryState(id){
+  history.pushState({ modalId: id }, '');
+}
+function popModalHistoryIfNeeded(id){
+  if(history.state && history.state.modalId === id) history.back();
+}
+window.addEventListener('popstate', (e)=>{
+  MODAL_IDS.forEach(id=>{
+    if(e.state && e.state.modalId === id) return; // 이 모달 상태로 되돌아온 경우는 그대로 둠
+    const el = document.getElementById(id);
+    if(el && el.classList.contains('open')) el.classList.remove('open');
+  });
+});
 
 function toggleAddForm(){
   const el = document.getElementById('addFormFields');
@@ -1276,6 +1328,7 @@ function openSchedModal(){
   renderCalendar();
   renderSchedList();
   document.getElementById('schedModalBg').classList.add('open');
+  pushModalHistoryState('schedModalBg');
 }
 async function closeSchedModal(){
   // 추가/수정 폼이 열려있고 제목을 입력해둔 상태면, 저장 버튼을 안 눌렀어도
@@ -1288,6 +1341,7 @@ async function closeSchedModal(){
     await addSchedule();
   }
   document.getElementById('schedModalBg').classList.remove('open');
+  popModalHistoryIfNeeded('schedModalBg');
 }
 
 async function addSchedule(){
@@ -1537,13 +1591,17 @@ function render(){
               ${ageExpireBadge(v)}
             </div>
             <div class="model">${escapeHtml(v.cls)} · ${escapeHtml(v.model)}${v.fuel?' · '+escapeHtml(v.fuel):''}</div>
-            ${v.note?`<div class="note">${escapeHtml(v.note)}</div>`:''}
-            ${v.extra?`<div class="extra">${escapeHtml(v.extra)}</div>`:''}
-            ${v.returnDate?`<div class="extra${due?' return-due':(soon?' return-soon':'')}">반납일자: ${formatReturnDate(v.returnDate)}</div>`:''}
+            ${(()=>{
+              const returnLine = v.returnDate?`<div class="extra${due?' return-due':(soon?' return-soon':'')}">반납일자: ${formatReturnDate(v.returnDate)}</div>`:'';
+              const noteLine = v.note?`<div class="note">${escapeHtml(v.note)}</div>`:'';
+              const extraLine = v.extra?`<div class="extra">${escapeHtml(v.extra)}</div>`:'';
+              // 일반 타입은 대여 정보 바로 아래에 반납일자가 오도록, 그 외 타입은 기존 순서(비고/추가정보 다음)를 유지
+              return v.type==='일반' ? returnLine+noteLine+extraLine : noteLine+extraLine+returnLine;
+            })()}
             ${renderAsLine(v)}
             ${renderInspectionLine(v)}
           </div>
-          ${v.amount?`<div class="amount">${v.customerName?`${escapeHtml(v.customerName)}<br>`:''}${escapeHtml(String(v.amount))}만원${v.payDay?`<br>매월 ${escapeHtml(String(v.payDay))}일`:''}</div>`:''}
+          ${v.amount?`<div class="amount">${v.customerName?`${escapeHtml(v.customerName)}<br>`:''}${escapeHtml(String(v.amount))}만원${v.payDay?`<br>매월 ${escapeHtml(String(v.payDay))}일`:''}${v.type==='일반'?`<br><span style="color:${v.depositPaid?'var(--green)':'var(--red)'};font-weight:700;">${v.depositPaid?'💰 입금완료':'⚠️ 미입금'}</span>`:''}</div>`:''}
         </div>`;
     }).join('');
     return `<div class="section-title"><span>${escapeHtml(branch)}</span><span>${items.length}대</span></div>${cards}`;
@@ -1659,6 +1717,7 @@ function openModal(plate){
   document.getElementById('mCustomer').value = v.customerName || '';
   document.getElementById('mCustomerPhone').value = v.customerPhone || '';
   document.getElementById('mReturnDate').value = v.returnDate || '';
+  document.getElementById('mDepositPaid').checked = !!v.depositPaid;
   document.getElementById('mInsuranceDate').value = v.insuranceDate || '';
   updateInsuranceInfo();
   document.getElementById('mInspectionType').value = v.inspectionType || '일반';
@@ -1673,11 +1732,13 @@ function openModal(plate){
   setupDocsBadge(v);
   toggleAmountField('m', false);
   document.getElementById('modalBg').classList.add('open');
+  pushModalHistoryState('modalBg');
 }
 function closeModal(){
   document.getElementById('modalBg').classList.remove('open');
   window._editingPlate = null;
   cancelDeletePress();
+  popModalHistoryIfNeeded('modalBg');
 }
 function setStatus(s){ document.getElementById('mStatus').value = s; }
 function setupDocsBadge(v, autoToggle){
@@ -1795,28 +1856,44 @@ function toggleAmountField(prefix, clear){
   const type = document.getElementById(prefix+'Type').value;
   const isLong = (type==='장기');
   const isGeneral = (type==='일반');
-  document.getElementById(prefix+'AmountField').style.display = isLong ? '' : 'none';
-  document.getElementById(prefix+'PayDayField').style.display = isLong ? '' : 'none';
+  const needsMoneyInfo = isLong || isGeneral; // 장기(월세)든 일반(직접 수금)이든 금액/고객 정보가 필요함
+  document.getElementById(prefix+'AmountField').style.display = needsMoneyInfo ? '' : 'none';
+  document.getElementById(prefix+'PayDayField').style.display = isLong ? '' : 'none'; // 결제일(매월 며칠)은 장기 전용
   const custField = document.getElementById(prefix+'CustomerField');
   const custPhoneField = document.getElementById(prefix+'CustomerPhoneField');
-  if(custField) custField.style.display = isLong ? '' : 'none';
-  if(custPhoneField) custPhoneField.style.display = isLong ? '' : 'none';
+  if(custField) custField.style.display = needsMoneyInfo ? '' : 'none';
+  if(custPhoneField) custPhoneField.style.display = needsMoneyInfo ? '' : 'none';
   document.getElementById(prefix+'ReturnDateField').style.display = isGeneral ? '' : 'none';
+  const depositField = document.getElementById(prefix+'DepositField');
+  if(depositField) depositField.style.display = isGeneral ? '' : 'none';
   if(!isLong && clear!==false){
-    document.getElementById(prefix+'Amount').value = '';
     document.getElementById(prefix+'PayDay').value = '';
+  }
+  if(!needsMoneyInfo && clear!==false){
+    document.getElementById(prefix+'Amount').value = '';
     if(document.getElementById(prefix+'Customer')) document.getElementById(prefix+'Customer').value = '';
     if(document.getElementById(prefix+'CustomerPhone')) document.getElementById(prefix+'CustomerPhone').value = '';
   }
   if(!isGeneral && clear!==false){
     document.getElementById(prefix+'ReturnDate').value = '';
+    if(document.getElementById(prefix+'DepositPaid')) document.getElementById(prefix+'DepositPaid').checked = false;
   }
+  syncDepositUI(prefix);
+}
+
+// 입금완료 체크박스 라벨을 상태에 맞게 갱신 (체크: 입금완료 / 미체크: 미입금 상태임을 눈에 띄게)
+function syncDepositUI(prefix){
+  const label = document.getElementById(prefix+'DepositLabel');
+  if(!label) return;
+  const checked = document.getElementById(prefix+'DepositPaid').checked;
+  label.textContent = checked ? '입금완료' : '미입금 상태 (체크하면 입금완료로 바뀌어요)';
+  label.style.color = checked ? 'var(--green)' : 'var(--red)';
 }
 function scheduleKeyForPlate(plate){
   return 'auto-return-' + (plate||'').toString().replace(/[.#$\[\]\/\s]/g,'_');
 }
 
-async function syncReturnSchedule(plate, oldDate, newDate){
+async function syncReturnSchedule(plate, oldDate, newDate, type){
   const { ref, set, update, db } = window._fb;
   const key = scheduleKeyForPlate(plate);
   if(newDate){
@@ -1829,6 +1906,7 @@ async function syncReturnSchedule(plate, oldDate, newDate){
         memo: '',
         auto: true,
         plate: plate,
+        type: type || null,
         done: false,
         doneAt: null
       });
@@ -1836,7 +1914,8 @@ async function syncReturnSchedule(plate, oldDate, newDate){
     // 날짜가 그대로면 완료 상태 등 기존 값을 건드리지 않음
   } else if(oldDate){
     // 반납일을 지웠다 = 차량이 회수됨 → 삭제 대신 완료 처리해서 기록을 남김 (회수시간 기록)
-    await update(ref(db, 'schedules/'+key), { done: true, doneAt: new Date().toISOString(), plate: plate });
+    // type도 이 시점 값으로 같이 저장(나중에 차량의 type이 초기화돼도 '일반' 여부를 알 수 있게)
+    await update(ref(db, 'schedules/'+key), { done: true, doneAt: new Date().toISOString(), plate: plate, type: type || null });
   }
 }
 
@@ -1846,10 +1925,10 @@ async function syncAllReturnSchedules(){
     const existing = schedules[key];
     if(v.returnDate){
       if(!existing || existing.date !== v.returnDate){
-        await syncReturnSchedule(v.plate, null, v.returnDate);
+        await syncReturnSchedule(v.plate, null, v.returnDate, v.type);
       }
     } else if(existing && !existing.done){
-      await syncReturnSchedule(v.plate, existing.date, null);
+      await syncReturnSchedule(v.plate, existing.date, null, v.type);
     }
   }
 }
@@ -1869,6 +1948,7 @@ async function saveModal(){
   v.customerName = document.getElementById('mCustomer').value.trim();
   v.customerPhone = document.getElementById('mCustomerPhone').value.trim();
   v.returnDate = document.getElementById('mReturnDate').value || null;
+  v.depositPaid = (v.type==='일반') ? document.getElementById('mDepositPaid').checked : null;
   v.insuranceDate = document.getElementById('mInsuranceDate').value || null;
   const oldInspectionDate = v.inspectionDate || null;
   v.inspectionType = document.getElementById('mInspectionType').value;
@@ -1885,7 +1965,7 @@ async function saveModal(){
   closeModal();
   render();
   await persist({type:'upsert', vehicle: v});
-  await syncReturnSchedule(v.plate, oldReturnDate, v.returnDate);
+  await syncReturnSchedule(v.plate, oldReturnDate, v.returnDate, v.type);
 }
 
 async function deleteVehicle(){
@@ -1929,9 +2009,11 @@ function openAddModal(){
   updateAgeInfo('a');
   toggleAddDocsSection(false);
   document.getElementById('addModalBg').classList.add('open');
+  pushModalHistoryState('addModalBg');
 }
 function closeAddModal(){
   document.getElementById('addModalBg').classList.remove('open');
+  popModalHistoryIfNeeded('addModalBg');
 }
 async function saveAddModal(){
   const plate = document.getElementById('aPlate').value.trim();
@@ -1988,6 +2070,7 @@ async function reload(manual){
 
 function closeHistoryModal(){
   document.getElementById('historyModalBg').classList.remove('open');
+  popModalHistoryIfNeeded('historyModalBg');
 }
 function formatHistoryTime(ts){
   const d = new Date(ts);
@@ -1996,6 +2079,7 @@ function formatHistoryTime(ts){
 }
 async function openHistoryModal(){
   document.getElementById('historyModalBg').classList.add('open');
+  pushModalHistoryState('historyModalBg');
   const listEl = document.getElementById('historyList');
   listEl.innerHTML = `<div class="empty">불러오는 중...</div>`;
   const { ref, get, db } = window._fb;
@@ -2061,6 +2145,13 @@ async function startApp(){
 }
 
 checkSitePin();
+</script>
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(err=>console.error('서비스워커 등록 실패:', err));
+    });
+  }
 </script>
 </body>
 </html>
