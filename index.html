@@ -83,6 +83,8 @@
     --purple:#c084fc;
     --red:#f87171;
     --gray:#64748b;
+    --pink:#f472b6;
+    --cyan:#22d3ee;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   body{
@@ -183,14 +185,14 @@
   }
   .badge.st-idle{background:rgba(245,166,35,.18);color:var(--amber);}
   .badge.st-prep{background:rgba(91,157,255,.18);color:var(--blue);}
-  .badge.st-dispatch{background:rgba(192,132,252,.18);color:var(--purple);}
+  .badge.st-dispatch{background:rgba(34,211,238,.16);color:var(--cyan);}
   .badge.st-running{background:rgba(52,211,153,.15);color:var(--green);}
   .type-badge{
     font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700;
     background:var(--panel2);color:var(--sub);
   }
   .type-badge.tp-보험{background:rgba(91,157,255,.15);color:var(--blue);}
-  .type-badge.tp-일반{background:rgba(139,150,184,.15);color:var(--sub);}
+  .type-badge.tp-일반{background:rgba(244,114,182,.16);color:var(--pink);}
   .type-badge.tp-서비스{background:rgba(245,166,35,.15);color:var(--amber);}
   .type-badge.tp-장기{background:rgba(192,132,252,.15);color:var(--purple);}
   .model{font-size:12.5px;color:var(--sub);margin-top:2px;}
@@ -216,6 +218,7 @@
   .amount{font-size:11px;color:var(--sub);white-space:nowrap;}
   .return-soon{color:var(--amber);font-weight:700;}
   .badge.return-soon{background:rgba(245,166,35,.18);}
+  .badge.unpaid{background:rgba(248,113,113,.18);color:var(--red);}
   .card.return-soon-alert{border-left-color:var(--amber);}
   .empty{text-align:center;color:var(--sub);font-size:13px;padding:30px 0;}
 
@@ -1575,7 +1578,7 @@ function render(){
     const cards = items.map(v=>{
       const sc = statusClass(v);
       const due = v.returnDate ? isReturnDue(v.returnDate) : false;
-      const soon = (!due && v.returnDate) ? isReturnSoon(v.returnDate) : false;
+      const soon = (!due && v.returnDate) ? isReturnSoon(v.returnDate, 1) : false;
       const cardExtraClass = due ? ' return-alert' : (soon ? ' return-soon-alert' : '');
       return `
         <div class="card ${sc}${cardExtraClass}" data-plate="${escapeHtml(v.plate)}">
@@ -1587,6 +1590,7 @@ function render(){
               <span class="badge ${sc}">${escapeHtml(statusLabel(v))}</span>
               ${due?`<span class="badge return-due">⏰ 반납일 도래</span>`:''}
               ${soon?`<span class="badge return-soon">🔔 반납임박</span>`:''}
+              ${(v.type==='일반' && !v.depositPaid)?`<span class="badge unpaid">💸 미입금</span>`:''}
               ${insuranceBadge(v)}
               ${ageExpireBadge(v)}
             </div>
