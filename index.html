@@ -137,14 +137,14 @@
   .link-btn.app{color:var(--green);}
   .link-btn.kakao{color:#FEE500;}
 
-  .stats{display:flex;gap:6px;margin-top:8px;overflow-x:auto;padding-bottom:2px;}
+  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:8px;}
   .stat{
-    flex:0 0 auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    padding:6px 10px;text-align:center;min-width:52px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:6px 2px;text-align:center;min-width:0;
     cursor:pointer;user-select:none;transition:border-color .15s,background .15s;
   }
-  .stat b{display:block;font-size:15px;}
-  .stat span{font-size:10px;color:var(--sub);}
+  .stat b{display:block;font-size:13.5px;line-height:1.15;white-space:nowrap;}
+  .stat span{font-size:9px;color:var(--sub);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .stat.amber b{color:var(--amber);}
   .stat.blue b{color:var(--blue);}
   .stat.purple b{color:var(--purple);}
@@ -1276,10 +1276,12 @@ function renderSchedBanner(){
     html += `<div class="sched-item unbilled"><span class="sched-tag">미입금</span><span class="sched-title">일반 차량 중 미입금 차량이 ${unpaidCount}건 있습니다</span></div>`;
   }
   todayItems.forEach(s=>{
-    html += `<div class="sched-item today" onclick="openSchedModalOnDate('${today}')"><span class="sched-tag">오늘</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span></div>`;
+    const paidTag = s.type==='일반' ? `<span class="sched-tag" style="background:${s.depositPaid?'var(--green)':'var(--red)'};color:${s.depositPaid?'#0a2016':'#2a0d0d'};">${s.depositPaid?'입금완료':'미입금'}</span>` : '';
+    html += `<div class="sched-item today" onclick="openSchedModalOnDate('${today}')"><span class="sched-tag">오늘</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span>${paidTag}</div>`;
   });
   tomorrowItems.forEach(s=>{
-    html += `<div class="sched-item tomorrow" onclick="openSchedModalOnDate('${tomorrow}')"><span class="sched-tag">내일</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span></div>`;
+    const paidTag = s.type==='일반' ? `<span class="sched-tag" style="background:${s.depositPaid?'var(--green)':'var(--red)'};color:${s.depositPaid?'#0a2016':'#2a0d0d'};">${s.depositPaid?'입금완료':'미입금'}</span>` : '';
+    html += `<div class="sched-item tomorrow" onclick="openSchedModalOnDate('${tomorrow}')"><span class="sched-tag">내일</span><span class="sched-title">${escapeHtml(s.title)}${s.memo?` · ${escapeHtml(s.memo)}`:''}</span>${paidTag}</div>`;
   });
   el.innerHTML = html;
 }
@@ -1547,7 +1549,7 @@ function renderStats(){
     <div class="stat blue ${statusFilter==='준비중'?'active':''}" onclick="toggleStatusFilter('준비중')"><b>${prep}</b><span>준비중</span></div>
     <div class="stat green ${statusFilter==='운행중'?'active':''}" onclick="toggleStatusFilter('운행중')"><b>${running}</b><span>운행중</span></div>
     <div class="stat purple ${statusFilter==='장기'?'active':''}" onclick="toggleStatusFilter('장기')"><b>${longCount}대</b><span>장기</span></div>
-    <div class="stat purple"><b>${longAmount.toLocaleString()}</b><span>장기금액(만)</span></div>
+    <div class="stat purple"><b>${longAmount.toLocaleString()}만</b><span>장기금액</span></div>
   `;
 }
 
