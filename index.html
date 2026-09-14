@@ -13,6 +13,14 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="장성현황판">
 <script>
+  // 서비스워커 등록 (오프라인일 때도 화면이 뜨게 해줌, Firebase 실시간 데이터는 캐싱 안 함)
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+</script>
+<script>
   // 카카오톡 등 인앱브라우저에서 열렸으면 외부 브라우저(크롬/사파리)로 자동 이탈
   (function(){
     var ua = navigator.userAgent || '';
@@ -87,6 +95,7 @@
     --cyan:#22d3ee;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  button{touch-action:manipulation;cursor:pointer;}
   body{
     margin:0;
     background:var(--bg);
@@ -99,7 +108,7 @@
   header{
     position:sticky;top:0;z-index:20;
     background:linear-gradient(180deg,#0f172a 0%,#0f172a 85%,transparent 100%);
-    padding:14px 14px 8px;
+    padding:10px 14px 7px;
     border-bottom:1px solid var(--line);
   }
   header .title-row{display:flex;justify-content:center;align-items:center;gap:8px;text-align:center;}
@@ -116,7 +125,7 @@
     width:100%;text-align:center;
   }
   .header-actions{
-    display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:6px;margin-top:10px;
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:6px;margin-top:8px;
   }
   .link-btn{
     background:var(--panel2);border:1px solid var(--line);color:var(--text);
@@ -128,7 +137,7 @@
   .link-btn.app{color:var(--green);}
   .link-btn.kakao{color:#FEE500;}
 
-  .stats{display:flex;gap:6px;margin-top:10px;overflow-x:auto;padding-bottom:2px;}
+  .stats{display:flex;gap:6px;margin-top:8px;overflow-x:auto;padding-bottom:2px;}
   .stat{
     flex:0 0 auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;
     padding:6px 10px;text-align:center;min-width:52px;
@@ -145,18 +154,18 @@
   .stat.blue.active{color:var(--blue);}
   .stat.green.active{color:var(--green);}
 
-  .search-row{display:flex;gap:8px;margin-top:10px;}
+  .search-row{display:flex;gap:8px;margin-top:8px;}
   .search-row input{
     flex:1;background:var(--panel);border:1px solid var(--line);color:var(--text);
     border-radius:9px;padding:9px 12px;font-size:14px;
   }
 
-  main{padding:12px;}
+  main{padding:10px 12px 12px;}
   .section-title{
-    font-size:13px;font-weight:700;color:var(--sub);margin:16px 4px 8px;
+    font-size:13px;font-weight:700;color:var(--sub);margin:14px 4px 8px;
     display:flex;justify-content:space-between;
   }
-  .section-title:first-child{margin-top:4px;}
+  .section-title:first-child{margin-top:3px;}
 
   .card{
     background:var(--panel);border:1px solid var(--line);border-radius:12px;
@@ -219,6 +228,7 @@
   .return-soon{color:var(--amber);font-weight:700;}
   .badge.return-soon{background:rgba(245,166,35,.18);}
   .badge.unpaid{background:rgba(248,113,113,.18);color:var(--red);}
+  .badge.paid{background:rgba(52,211,153,.15);color:var(--green);}
   .card.return-soon-alert{border-left-color:var(--amber);}
   .empty{text-align:center;color:var(--sub);font-size:13px;padding:30px 0;}
 
@@ -248,18 +258,24 @@
   .modal-bg.open{display:flex;}
   .modal{
     background:var(--panel);width:100%;max-width:480px;border-radius:16px 16px 0 0;
-    padding:18px 16px calc(56px + env(safe-area-inset-bottom));border:1px solid var(--line);border-bottom:none;
+    padding:18px 16px calc(80px + env(safe-area-inset-bottom));border:1px solid var(--line);border-bottom:none;
     max-height:94vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    box-sizing:border-box;
   }
   .modal h3{margin:0 0 2px;font-size:16px;}
   .modal .sub{color:var(--sub);font-size:12px;margin-bottom:14px;}
   .modal-fixed-footer{
     position:fixed;left:0;right:0;bottom:0;display:none;justify-content:center;
-    background:var(--panel);border-top:1px solid var(--line);z-index:51;
+    background:var(--panel);border-top:1px solid var(--line);z-index:55;
     padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+    box-sizing:border-box;
   }
   .modal-bg.open .modal-fixed-footer{ display:flex; }
-  .modal-fixed-footer .btn-cancel{ width:100%;max-width:480px;padding:15px;font-size:15px;font-weight:700;border-radius:12px; }
+  .modal-fixed-footer .btn-cancel{
+    width:100%;max-width:480px;padding:15px;font-size:15px;font-weight:700;border-radius:12px;
+    touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer;
+  }
+  .modal-fixed-footer .btn-cancel:active{ background:var(--line); }
   .field{margin-bottom:12px;}
   .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:5px;}
   .field input{
@@ -423,7 +439,7 @@
   <div class="sched-banner" id="schedBanner"></div>
   <div class="search-row">
     <input id="searchInput" placeholder="차량번호 / 담당자 / 메모 검색" oninput="render()">
-    <select id="sortSelect" onchange="render()" style="background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:9px 10px;font-size:13px;">
+    <select id="sortSelect" onchange="render()" style="background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:7px 10px;font-size:13px;">
       <option value="default">기본순</option>
       <option value="plate">차량번호순</option>
       <option value="status" selected>상태순</option>
@@ -1031,7 +1047,18 @@ function statusClass(v){
   if(v.status==='준비중') return 'st-prep';
   return 'st-running';
 }
+function totalDaysBetween(startStr, endStr){
+  const start = new Date(startStr+'T00:00:00');
+  const end = new Date(endStr+'T00:00:00');
+  const diff = Math.round((end-start)/86400000)+1;
+  return diff<1 ? 1 : diff;
+}
 function statusLabel(v){
+  if(v.startDate && v.returnDate){
+    const total = totalDaysBetween(v.startDate, v.returnDate);
+    const cur = Math.min(daysSince(v.startDate), total);
+    return `${total}일중 ${cur}일째`;
+  }
   if(v.startDate) return `${daysSince(v.startDate)}일째`;
   return v.status ? v.status : '운행중';
 }
@@ -1483,7 +1510,7 @@ function renderSchedList(){
       <div class="sched-list-row${done?' done':''}">
         <div>
           <div class="d">${m}월 ${d}일${s.repeat?'<span class="sched-repeat-tag">매월 반복</span>':''}</div>
-          <div class="t">${escapeHtml(s.title)}</div>
+          <div class="t">${escapeHtml(s.title)}${s.type==='일반'?`<span class="badge${s.depositPaid?' paid':' unpaid'}" style="margin-left:6px;vertical-align:middle;">${s.depositPaid?'💰 입금완료':'⚠️ 미입금'}</span>`:''}</div>
           ${s.memo?`<div class="m">${escapeHtml(s.memo)}</div>`:''}
         </div>
         <div class="actions">
@@ -1897,9 +1924,10 @@ function scheduleKeyForPlate(plate){
   return 'auto-return-' + (plate||'').toString().replace(/[.#$\[\]\/\s]/g,'_');
 }
 
-async function syncReturnSchedule(plate, oldDate, newDate, type){
+async function syncReturnSchedule(plate, oldDate, newDate, type, depositPaid){
   const { ref, set, update, db } = window._fb;
   const key = scheduleKeyForPlate(plate);
+  const dp = (depositPaid===undefined) ? null : depositPaid;
   if(newDate){
     if(newDate !== oldDate){
       // 새 반납일이거나 날짜가 바뀐 경우: 완료 상태를 초기화하고 등록/갱신
@@ -1911,15 +1939,18 @@ async function syncReturnSchedule(plate, oldDate, newDate, type){
         auto: true,
         plate: plate,
         type: type || null,
+        depositPaid: dp,
         done: false,
         doneAt: null
       });
+    } else {
+      // 날짜는 그대로여도 입금 상태는 최신값으로 갱신 (완료 상태 등은 건드리지 않음)
+      await update(ref(db, 'schedules/'+key), { type: type || null, depositPaid: dp });
     }
-    // 날짜가 그대로면 완료 상태 등 기존 값을 건드리지 않음
   } else if(oldDate){
     // 반납일을 지웠다 = 차량이 회수됨 → 삭제 대신 완료 처리해서 기록을 남김 (회수시간 기록)
     // type도 이 시점 값으로 같이 저장(나중에 차량의 type이 초기화돼도 '일반' 여부를 알 수 있게)
-    await update(ref(db, 'schedules/'+key), { done: true, doneAt: new Date().toISOString(), plate: plate, type: type || null });
+    await update(ref(db, 'schedules/'+key), { done: true, doneAt: new Date().toISOString(), plate: plate, type: type || null, depositPaid: dp });
   }
 }
 
@@ -1928,11 +1959,11 @@ async function syncAllReturnSchedules(){
     const key = scheduleKeyForPlate(v.plate);
     const existing = schedules[key];
     if(v.returnDate){
-      if(!existing || existing.date !== v.returnDate){
-        await syncReturnSchedule(v.plate, null, v.returnDate, v.type);
+      if(!existing || existing.date !== v.returnDate || existing.depositPaid !== (v.depositPaid===undefined?null:v.depositPaid)){
+        await syncReturnSchedule(v.plate, existing?existing.date:null, v.returnDate, v.type, v.depositPaid);
       }
     } else if(existing && !existing.done){
-      await syncReturnSchedule(v.plate, existing.date, null, v.type);
+      await syncReturnSchedule(v.plate, existing.date, null, v.type, v.depositPaid);
     }
   }
 }
@@ -1969,7 +2000,7 @@ async function saveModal(){
   closeModal();
   render();
   await persist({type:'upsert', vehicle: v});
-  await syncReturnSchedule(v.plate, oldReturnDate, v.returnDate, v.type);
+  await syncReturnSchedule(v.plate, oldReturnDate, v.returnDate, v.type, v.depositPaid);
 }
 
 async function deleteVehicle(){
