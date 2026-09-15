@@ -349,7 +349,7 @@
 </head>
 <body>
 <div class="lock-screen" id="lockScreen">
-  <div id="lockChecking">
+  <div id="lockChecking" style="opacity:0;">
     <div class="lock-icon">🚗</div>
     <p style="margin-top:10px;">불러오는 중...</p>
   </div>
@@ -1397,6 +1397,7 @@
   }
   function checkSitePin(){
     const apply = ()=>{
+      clearTimeout(_checkingRevealTimer);
       if(window._fbUser){
         document.getElementById('lockScreen').style.display = 'none';
         if(!_appStarted){
@@ -1409,6 +1410,10 @@
         document.getElementById('lockLoginBox').style.display = 'flex';
       }
     };
+    const _checkingRevealTimer = setTimeout(()=>{
+      const el = document.getElementById('lockChecking');
+      if(el) el.style.opacity = '1';
+    }, 350);
     window.addEventListener('auth-state-changed', apply);
     if(window._fbUser !== undefined) apply();
     setTimeout(()=>{

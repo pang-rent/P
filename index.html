@@ -412,7 +412,7 @@
 <body>
 
 <div class="lock-screen" id="lockScreen">
-  <div id="lockChecking">
+  <div id="lockChecking" style="opacity:0;">
     <div class="lock-icon">🚗</div>
     <p style="margin-top:10px;">불러오는 중...</p>
   </div>
@@ -435,6 +435,7 @@
       <div class="date" id="dateLine"></div>
     </div>
     <button class="history-btn" onclick="openHistoryModal()" title="변경기록">🕒</button>
+    <button class="history-btn" onclick="openStaffModal()" title="로그인 허용 계정 관리">👥</button>
   </div>
   <div class="header-actions">
     <a class="link-btn telegram" href="intent://t.me/+zgPlZTwlkk8wYWVl#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Ft.me%2F%2BzgPlZTwlkk8wYWVl;end">📱 텔레그램방</a>
@@ -758,6 +759,24 @@
   </div>
 </div>
 
+<div class="modal-bg" id="staffModalBg">
+  <div class="modal">
+    <h3>👥 로그인 허용 계정 관리</h3>
+    <div class="sub">여기 등록된 구글 계정만 로그인해서 현황판/결제알림을 볼 수 있어요. 등록된 사람만 새 사람을 추가할 수 있습니다.</div>
+    <div id="staffList"><div class="empty">불러오는 중...</div></div>
+    <div class="field" style="margin-top:14px;">
+      <label>새 구글 계정(이메일) 추가</label>
+      <div style="display:flex;gap:8px;">
+        <input id="staffNewEmail" placeholder="예: name@gmail.com" style="flex:1;" onkeydown="if(event.key==='Enter')addStaffEmail()">
+        <button class="btn-save" style="width:56px;padding:0;font-size:20px;" onclick="addStaffEmail()">+</button>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn-cancel" style="width:100%;padding:15px;font-size:15px;font-weight:700;border-radius:12px;" onclick="closeStaffModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -800,6 +819,7 @@ async function signInWithGoogle(){
 }
 function checkSitePin(){
   const apply = ()=>{
+    clearTimeout(_checkingRevealTimer);
     if(window._fbUser){
       document.getElementById('lockScreen').style.display = 'none';
       if(!_appStarted){
@@ -812,6 +832,12 @@ function checkSitePin(){
       document.getElementById('lockLoginBox').style.display = 'flex';
     }
   };
+  // 확인이 금방 끝나면(이미 로그인된 기기) 이 로딩 표시는 아예 안 보이게 하고,
+  // 0.35초 넘게 걸릴 때만 "불러오는 중"을 살짝 보여줘서 화면이 멈춘 것처럼 안 보이게 함
+  const _checkingRevealTimer = setTimeout(()=>{
+    const el = document.getElementById('lockChecking');
+    if(el) el.style.opacity = '1';
+  }, 350);
   window.addEventListener('auth-state-changed', apply);
   if(window._fbUser !== undefined) apply(); // 이벤트가 이미 지나갔을 경우 대비
   // 안전장치: 4초가 지나도 로그인 여부 확인이 안 끝나면(느린 네트워크, 브라우저 문제 등)
@@ -1363,7 +1389,7 @@ function escapeHtml(s){
 // 모달을 열 때마다 히스토리를 하나 쌓아두고, 뒤로가기가 오면 페이지를 벗어나는
 // 대신 열려있는 모달만 닫히게 합니다. 앱 내 닫기/취소/저장 버튼으로 닫을 때도
 // 쌓아둔 히스토리를 같이 되돌려서 스택이 계속 쌓이지 않게 맞춰줍니다.
-const MODAL_IDS = ['modalBg','schedModalBg','addModalBg','historyModalBg'];
+const MODAL_IDS = ['modalBg','schedModalBg','addModalBg','historyModalBg','staffModalBg'];
 function pushModalHistoryState(id){
   history.pushState({ modalId: id }, '');
 }
@@ -2171,6 +2197,92 @@ async function reload(manual){
 function closeHistoryModal(){
   document.getElementById('historyModalBg').classList.remove('open');
   popModalHistoryIfNeeded('historyModalBg');
+}
+
+// ── 로그인 허용 계정(직원) 관리 ──────────────────────────────
+// 허용 목록은 Realtime Database의 config/allowedEmailsStr 에 ",이메일,이메일," 형태의
+// 문자열로 저장되고, Database 규칙이 "이 목록에 내 이메일이 있어야만 읽기/쓰기 허용"으로
+// 검사합니다. 그래서 이미 등록된 사람만 이 화면에서 새 사람을 추가/삭제할 수 있습니다.
+const ALLOWED_EMAILS_PATH = 'config/allowedEmailsStr';
+function parseEmailList(str){
+  return (str||'').split(',').map(s=>s.trim()).filter(Boolean);
+}
+function buildEmailListStr(emails){
+  return ',' + emails.join(',') + ',';
+}
+function closeStaffModal(){
+  document.getElementById('staffModalBg').classList.remove('open');
+  popModalHistoryIfNeeded('staffModalBg');
+}
+function renderStaffList(emails){
+  const listEl = document.getElementById('staffList');
+  if(emails.length===0){
+    listEl.innerHTML = `<div class="empty">등록된 계정이 없어요.</div>`;
+    return;
+  }
+  const myEmail = window._fbUser && window._fbUser.email;
+  listEl.innerHTML = emails.map(email=>`
+    <div class="sched-list-row">
+      <div class="t">${escapeHtml(email)}${email===myEmail?' <span style="color:var(--sub);font-size:11px;">(나)</span>':''}</div>
+      <button class="del" onclick="removeStaffEmail('${escapeHtml(email).replace(/'/g,"\\'")}')">✕ 삭제</button>
+    </div>`).join('');
+}
+async function openStaffModal(){
+  document.getElementById('staffModalBg').classList.add('open');
+  pushModalHistoryState('staffModalBg');
+  const listEl = document.getElementById('staffList');
+  listEl.innerHTML = `<div class="empty">불러오는 중...</div>`;
+  const { ref, get, db } = window._fb;
+  try{
+    const snap = await get(ref(db, ALLOWED_EMAILS_PATH));
+    renderStaffList(parseEmailList(snap.exists() ? snap.val() : ''));
+  }catch(e){
+    console.error(e);
+    listEl.innerHTML = `<div class="empty">불러오기 실패했어요.</div>`;
+  }
+}
+async function addStaffEmail(){
+  const input = document.getElementById('staffNewEmail');
+  const email = input.value.trim().toLowerCase();
+  if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    showToast('올바른 이메일 형식으로 입력해주세요');
+    return;
+  }
+  const { ref, get, set, db } = window._fb;
+  try{
+    const snap = await get(ref(db, ALLOWED_EMAILS_PATH));
+    const emails = parseEmailList(snap.exists() ? snap.val() : '');
+    if(emails.includes(email)){
+      showToast('이미 등록된 계정이에요');
+      return;
+    }
+    emails.push(email);
+    await set(ref(db, ALLOWED_EMAILS_PATH), buildEmailListStr(emails));
+    input.value = '';
+    renderStaffList(emails);
+    showToast('계정이 추가됐어요');
+  }catch(e){
+    console.error(e);
+    showToast('추가 실패 - 다시 시도해주세요');
+  }
+}
+async function removeStaffEmail(email){
+  const myEmail = window._fbUser && window._fbUser.email;
+  const msg = email===myEmail
+    ? '내 계정을 삭제하면 나도 바로 로그인이 막혀요. 정말 삭제할까요?'
+    : `"${email}" 계정을 삭제할까요? 이 계정은 더 이상 로그인할 수 없게 됩니다.`;
+  if(!confirm(msg)) return;
+  const { ref, get, set, db } = window._fb;
+  try{
+    const snap = await get(ref(db, ALLOWED_EMAILS_PATH));
+    const emails = parseEmailList(snap.exists() ? snap.val() : '').filter(e=>e!==email);
+    await set(ref(db, ALLOWED_EMAILS_PATH), buildEmailListStr(emails));
+    renderStaffList(emails);
+    showToast('계정이 삭제됐어요');
+  }catch(e){
+    console.error(e);
+    showToast('삭제 실패 - 다시 시도해주세요');
+  }
 }
 function formatHistoryTime(ts){
   const d = new Date(ts);
