@@ -57,12 +57,10 @@
   const auth = getAuth(app);
   window._fb = { ref, get, set, update, onValue, push, remove, runTransaction, db };
   window._auth = { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut };
-  // 모바일 브라우저는 팝업 로그인을 막는 경우가 많아서, 리다이렉트로 로그인하고
-  // 돌아왔을 때 이 결과를 받아옵니다(실패해도 로그인 자체를 안 한 상태와 같으므로 조용히 무시).
+  // 예전 버전에서 리다이렉트 로그인 도중이던 사람을 위해 결과만 받아두고,
+  // 실패해도(=저장공간 분리로 세션 유실) 로그인을 안 한 상태와 같으므로 화면에 오류를 띄우지 않고 무시합니다.
   getRedirectResult(auth).catch((err)=>{
-    console.error('리다이렉트 로그인 결과 확인 실패', err);
-    window._redirectLoginError = err;
-    window.dispatchEvent(new Event('redirect-login-error'));
+    console.warn('리다이렉트 로그인 결과 확인 실패(무시함)', err);
   });
   // 구글 계정으로 로그인해야만 통과되게 바꿨습니다. Firebase가 한 번 로그인하면
   // 이 브라우저에 로그인 상태를 기억해두므로, 재방문 시에는 다시 로그인할 필요가 없습니다.
@@ -799,12 +797,11 @@ async function signInWithGoogle(){
   errEl.textContent = '';
   if(btn){ btn.disabled = true; }
   try{
-    const { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect } = window._auth;
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if(isMobile){
-      await signInWithRedirect(auth, new GoogleAuthProvider()); // 페이지가 이동하므로 이 아래는 실행 안 됨
-      return;
-    }
+    const { auth, GoogleAuthProvider, signInWithPopup } = window._auth;
+    // 예전에는 모바일에서 signInWithRedirect를 썼는데, 최신 브라우저(크롬/삼성인터넷/사파리)가
+    // 사이트별로 저장공간을 분리(storage partitioning)하면서 로그인하고 돌아와도 세션을 잃어버려
+    // "Unable to process request due to missing initial state" 오류가 납니다.
+    // 그래서 PC/모바일 구분 없이 팝업 방식으로 통일했습니다.
     await signInWithPopup(auth, new GoogleAuthProvider());
     // 성공하면 onAuthStateChanged → auth-state-changed 이벤트가 알아서 화면을 넘겨줌.
     // 등록 안 된 계정이면 이후 loadData()에서 권한 오류로 걸러져서 다시 로그아웃됩니다.

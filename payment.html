@@ -30,10 +30,9 @@
   const auth = getAuth(app);
   window._fb = { ref, get, onValue, set, update, push, remove, db };
   window._auth = { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut };
+  // 예전 버전에서 리다이렉트 로그인 도중이던 사람 대비용. 실패해도 화면엔 표시하지 않고 무시.
   getRedirectResult(auth).catch((err)=>{
-    console.error('리다이렉트 로그인 결과 확인 실패', err);
-    window._redirectLoginError = err;
-    window.dispatchEvent(new Event('redirect-login-error'));
+    console.warn('리다이렉트 로그인 결과 확인 실패(무시함)', err);
   });
   // 구글 계정으로 로그인 (index.html과 동일한 방식, 같은 허용 목록을 공유함)
   onAuthStateChanged(auth, (user)=>{
@@ -1374,12 +1373,9 @@
     errEl.textContent = '';
     if(btn){ btn.disabled = true; }
     try{
-      const { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect } = window._auth;
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      if(isMobile){
-        await signInWithRedirect(auth, new GoogleAuthProvider());
-        return;
-      }
+      const { auth, GoogleAuthProvider, signInWithPopup } = window._auth;
+      // 모바일 리다이렉트 로그인은 최신 브라우저의 저장공간 분리 때문에
+      // "missing initial state" 오류가 나서, PC/모바일 모두 팝업으로 통일함.
       await signInWithPopup(auth, new GoogleAuthProvider());
     }catch(err){
       console.error(err);
