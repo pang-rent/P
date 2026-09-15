@@ -51,22 +51,20 @@
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getDatabase, ref, get, set, update, onValue, push, remove, runTransaction } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const auth = getAuth(app);
   window._fb = { ref, get, set, update, onValue, push, remove, runTransaction, db };
-  // 익명 로그인 후에만 fb-ready 발생시킴 → 아래 Realtime Database 규칙을
-  // "auth != null" 로 바꾸면, URL/API키만으로는 접근 못하고 이 페이지를
-  // 거쳐야만(=로그인 절차를 통과해야만) 데이터를 읽고 쓸 수 있게 됨.
+  window._auth = { auth, GoogleAuthProvider, signInWithPopup, signOut };
+  // 구글 계정으로 로그인해야만 통과되게 바꿨습니다. Firebase가 한 번 로그인하면
+  // 이 브라우저에 로그인 상태를 기억해두므로, 재방문 시에는 다시 로그인할 필요가 없습니다.
+  // Realtime Database 규칙에서 auth.token.email이 허용 목록에 있는지 확인하므로,
+  // 아무 구글 계정이나 로그인은 되지만 목록에 없는 계정은 데이터를 못 읽고 못 씁니다.
   onAuthStateChanged(auth, (user)=>{
-    if(user){
-      window._fbReady = true;
-      window.dispatchEvent(new Event('fb-ready'));
-    }
-  });
-  signInAnonymously(auth).catch((err)=>{
-    console.error('익명 로그인 실패', err);
+    window._fbUser = user;
+    window._fbReady = !!user;
+    window.dispatchEvent(new Event('auth-state-changed'));
   });
 </script>
 <style>
@@ -250,24 +248,31 @@
   .modal-bg.open{display:flex;}
   .modal{
     background:var(--panel);width:100%;max-width:480px;border-radius:16px 16px 0 0;
-    padding:18px 16px calc(80px + env(safe-area-inset-bottom));border:1px solid var(--line);border-bottom:none;
+    padding:18px 16px calc(18px + env(safe-area-inset-bottom));border:1px solid var(--line);border-bottom:none;
     max-height:94vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
     box-sizing:border-box;
   }
   .modal h3{margin:0 0 2px;font-size:16px;}
   .modal .sub{color:var(--sub);font-size:12px;margin-bottom:14px;}
-  .modal-fixed-footer{
-    position:fixed;left:0;right:0;bottom:0;display:none;justify-content:center;
-    background:var(--panel);border-top:1px solid var(--line);z-index:55;
-    padding:10px 16px calc(10px + env(safe-area-inset-bottom));
-    box-sizing:border-box;
+  .sched-modal-shell{
+    background:var(--panel);width:100%;max-width:480px;border-radius:16px 16px 0 0;
+    border:1px solid var(--line);border-bottom:none;
+    max-height:94vh;display:flex;flex-direction:column;overflow:hidden;
   }
-  .modal-bg.open .modal-fixed-footer{ display:flex; }
-  .modal-fixed-footer .btn-cancel{
+  .sched-modal-scroll{
+    overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 16px 14px;
+  }
+  .sched-modal-scroll h3{margin:0 0 2px;font-size:16px;}
+  .sched-modal-scroll .sub{color:var(--sub);font-size:12px;margin-bottom:14px;}
+  .modal-footer-inflow{
+    flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+  .modal-footer-inflow .btn-cancel{
     width:100%;max-width:480px;padding:15px;font-size:15px;font-weight:700;border-radius:12px;
     touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer;
   }
-  .modal-fixed-footer .btn-cancel:active{ background:var(--line); }
+  .modal-footer-inflow .btn-cancel:active{ background:var(--line); }
   .field{margin-bottom:12px;}
   .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:5px;}
   .field input{
@@ -405,9 +410,11 @@
 <div class="lock-screen" id="lockScreen">
   <div class="lock-icon">🔒</div>
   <h2>장성영업소 차량 현황판</h2>
-  <p>비밀번호를 입력하면 이 기기에서는 계속 자동으로 열려요</p>
-  <input type="password" inputmode="numeric" id="lockPinInput" placeholder="비밀번호" onkeydown="if(event.key==='Enter')tryUnlock()">
-  <button onclick="tryUnlock()">확인</button>
+  <p>등록된 구글 계정으로 로그인하면 이 기기에서는 계속 자동으로 열려요</p>
+  <button id="googleLoginBtn" onclick="signInWithGoogle()" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.5 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.1-2.5-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.9 19 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.5 3 24 3 16.3 3 9.7 7.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.3 0 10.1-2 13.7-5.4l-6.3-5.3C29.3 36 26.8 37 24 37c-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.6 40.6 16.3 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.3 5.3C40.9 36.5 44 30.9 44 24c0-1.4-.1-2.5-.4-3.5z"/></svg>
+    Google 계정으로 로그인
+  </button>
   <div class="lock-err" id="lockErr"></div>
 </div>
 
@@ -586,7 +593,8 @@
 </div>
 
 <div class="modal-bg" id="schedModalBg">
-  <div class="modal">
+  <div class="sched-modal-shell">
+    <div class="sched-modal-scroll">
     <h3>📅 일정 관리</h3>
     <div class="sub">날짜를 눌러 그날 일정을 보세요. 오늘/내일 일정은 상단 배너에도 표시돼요.</div>
 
@@ -634,10 +642,10 @@
         <button class="btn-save" style="flex:1;" onclick="addSchedule()"><span id="addFormSaveLabel">일정 추가</span></button>
       </div>
     </div>
-
-  </div>
-  <div class="modal-fixed-footer">
-    <button class="btn-cancel" onclick="closeSchedModal()">닫기</button>
+    </div>
+    <div class="modal-footer-inflow">
+      <button class="btn-cancel" onclick="closeSchedModal()">닫기</button>
+    </div>
   </div>
 </div>
 
@@ -745,30 +753,56 @@
 <script>
 const STORAGE_KEY = 'fleet-vehicles-jangseong-v1';
 
-// ── 최초 1회 비밀번호 확인 (이후엔 이 기기에서 자동으로 통과) ──────
-const SITE_PIN = '8990'; // ← 원하는 숫자로 이 값만 바꾸시면 됩니다
-const SITE_AUTH_KEY = 'fleetSitePinOK_v1';
-function tryUnlock(){
-  const input = document.getElementById('lockPinInput');
+// ── 실제 Firebase 로그인 (구글 계정으로 로그인) ──
+// Firebase 콘솔 → Authentication → 로그인 방법 → Google 켜기.
+// 그리고 Authentication → Settings → 승인된 도메인에 이 사이트 주소
+// (pang-rent.github.io)가 들어있는지 확인해주세요. 없으면 로그인 팝업이 안 떠요.
+// 아무 구글 계정이나 로그인 자체는 되지만, Realtime Database 규칙에서
+// auth.token.email이 허용 목록에 없으면 데이터를 못 읽고 못 씁니다(아래 signInWithGoogle 참고).
+let _appStarted = false;
+async function signInWithGoogle(){
   const errEl = document.getElementById('lockErr');
-  if(input.value.trim() === SITE_PIN){
-    localStorage.setItem(SITE_AUTH_KEY, '1');
-    document.getElementById('lockScreen').style.display = 'none';
-    startApp();
-  }else{
-    errEl.textContent = '비밀번호가 틀렸어요';
-    input.value = '';
-    input.focus();
+  const btn = document.getElementById('googleLoginBtn');
+  errEl.textContent = '';
+  if(btn){ btn.disabled = true; }
+  try{
+    const { auth, GoogleAuthProvider, signInWithPopup } = window._auth;
+    await signInWithPopup(auth, new GoogleAuthProvider());
+    // 성공하면 onAuthStateChanged → auth-state-changed 이벤트가 알아서 화면을 넘겨줌.
+    // 등록 안 된 계정이면 이후 loadData()에서 권한 오류로 걸러져서 다시 로그아웃됩니다.
+  }catch(err){
+    console.error(err);
+    if(err.code === 'auth/popup-closed-by-user'){
+      // 사용자가 그냥 팝업을 닫은 것뿐이라 에러 문구 안 띄움
+    }else if(err.code === 'auth/popup-blocked'){
+      errEl.textContent = '팝업이 차단됐어요. 브라우저 팝업 차단을 해제해주세요.';
+    }else{
+      errEl.textContent = '로그인에 실패했어요. 다시 시도해주세요.';
+    }
+  }finally{
+    if(btn){ btn.disabled = false; }
   }
 }
 function checkSitePin(){
-  if(localStorage.getItem(SITE_AUTH_KEY) === '1'){
-    document.getElementById('lockScreen').style.display = 'none';
-    startApp();
-  }else{
-    document.getElementById('lockScreen').style.display = 'flex';
-    document.getElementById('lockPinInput').focus();
-  }
+  const apply = ()=>{
+    if(window._fbUser){
+      document.getElementById('lockScreen').style.display = 'none';
+      if(!_appStarted){
+        _appStarted = true;
+        startApp();
+      }
+    }else{
+      document.getElementById('lockScreen').style.display = 'flex';
+    }
+  };
+  window.addEventListener('auth-state-changed', apply);
+  if(window._fbUser !== undefined) apply(); // 이벤트가 이미 지나갔을 경우 대비
+}
+// 등록되지 않은 구글 계정으로 로그인했을 때(=권한 없음) 다시 로그아웃시키고 안내
+async function rejectUnauthorized(){
+  document.getElementById('lockErr').textContent = '이 구글 계정은 등록되지 않았어요. 관리자에게 문의해주세요.';
+  _appStarted = false;
+  try{ await window._auth.signOut(window._auth.auth); }catch(e){}
 }
 
 // ── 비밀번호 잠금 제거됨 (누구나 조회/수정 가능) ─────────────
@@ -1055,6 +1089,11 @@ function statusLabel(v){
   return v.status ? v.status : '운행중';
 }
 
+function isPermissionDenied(e){
+  const msg = ((e && e.code) || '') + ' ' + ((e && e.message) || '');
+  return /permission_denied|PERMISSION_DENIED/i.test(msg);
+}
+
 let _suppressNextRemote = false;
 
 async function loadData(){
@@ -1069,10 +1108,15 @@ async function loadData(){
     }
   }catch(e){
     console.error(e);
+    if(isPermissionDenied(e)){
+      await rejectUnauthorized();
+      return false;
+    }
     vehicles = SEED.slice();
     showToast('연결 실패 - Firebase 설정을 확인하세요');
   }
   autoFlagReturnDue();
+  return true;
 }
 
 function autoFlagReturnDue(){
@@ -2161,10 +2205,8 @@ function setDate(){
 
 async function startApp(){
   setDate();
-  if(!window._fbReady){
-    await new Promise(resolve => window.addEventListener('fb-ready', resolve, {once:true}));
-  }
-  await loadData();
+  const ok = await loadData();
+  if(!ok) return; // 권한 없는 계정 - loadData 안에서 이미 로그아웃 처리됨
   render();
   startRealtimeSync();
   await loadSchedules();
@@ -2174,6 +2216,13 @@ async function startApp(){
 }
 
 checkSitePin();
+</script>
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(err=>console.error('서비스워커 등록 실패:', err));
+    });
+  }
 </script>
 </body>
 </html>

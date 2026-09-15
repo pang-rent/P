@@ -24,20 +24,17 @@
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getDatabase, ref, get, onValue, set, update, push, remove } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const auth = getAuth(app);
   window._fb = { ref, get, onValue, set, update, push, remove, db };
-  // 익명 로그인 후에만 fb-ready 발생시킴 (index.html과 동일한 방식)
+  window._auth = { auth, GoogleAuthProvider, signInWithPopup, signOut };
+  // 구글 계정으로 로그인 (index.html과 동일한 방식, 같은 허용 목록을 공유함)
   onAuthStateChanged(auth, (user)=>{
-    if(user){
-      window._fbReady = true;
-      window.dispatchEvent(new Event('fb-ready'));
-    }
-  });
-  signInAnonymously(auth).catch((err)=>{
-    console.error('익명 로그인 실패', err);
+    window._fbUser = user;
+    window._fbReady = !!user;
+    window.dispatchEvent(new Event('auth-state-changed'));
   });
 </script>
 <style>
@@ -353,9 +350,11 @@
 <div class="lock-screen" id="lockScreen">
   <div class="lock-icon">🔒</div>
   <h2>결제일 알림 대시보드</h2>
-  <p>비밀번호를 입력하면 이 기기에서는 계속 자동으로 열려요</p>
-  <input type="password" inputmode="numeric" id="lockPinInput" placeholder="비밀번호" onkeydown="if(event.key==='Enter')tryUnlock()">
-  <button onclick="tryUnlock()">확인</button>
+  <p>등록된 구글 계정으로 로그인하면 이 기기에서는 계속 자동으로 열려요</p>
+  <button id="googleLoginBtn" onclick="signInWithGoogle()" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.5 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.1-2.5-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.9 19 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.5 3 24 3 16.3 3 9.7 7.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.3 0 10.1-2 13.7-5.4l-6.3-5.3C29.3 36 26.8 37 24 37c-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.6 40.6 16.3 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.3 5.3C40.9 36.5 44 30.9 44 24c0-1.4-.1-2.5-.4-3.5z"/></svg>
+    Google 계정으로 로그인
+  </button>
   <div class="lock-err" id="lockErr"></div>
 </div>
 <div class="wrap">
@@ -760,19 +759,20 @@
       const customized = hasCustomMessage(v);
       const o = ovr(v.plate);
       const hasName = !!(v.customerName && v.customerName.trim());
+      const pe = escapeHtml(v.plate); // 속성값으로 쓸 때 항상 이스케이프된 이 변수를 사용
       const msgBlock = isEditing
-        ? `<textarea class="msg-edit" data-editbox="${v.plate}">${escapeHtml(msg)}</textarea>
+        ? `<textarea class="msg-edit" data-editbox="${pe}">${escapeHtml(msg)}</textarea>
            <div class="detail-actions" style="margin-bottom:10px;">
-             <button class="btn primary" data-savemsg="${v.plate}">저장</button>
-             <button class="btn ghost" data-canceledit="${v.plate}">취소</button>
+             <button class="btn primary" data-savemsg="${pe}">저장</button>
+             <button class="btn ghost" data-canceledit="${pe}">취소</button>
            </div>`
         : `<div class="msg-box">${escapeHtml(msg)}</div>`;
       const t2 = todayInfo();
       const failEntry = sendLog.find(l => l.plate === v.plate && l.ym === t2.ym && l.success === false);
       const failedThisMonth = failEntry && o.lastSentMonth !== t2.ym;
       return `
-        <div class="row status-${status} ${isOpen ? "open" : ""}" data-id="${v.plate}">
-          <div class="row-main" data-toggle="${v.plate}">
+        <div class="row status-${status} ${isOpen ? "open" : ""}" data-id="${pe}">
+          <div class="row-main" data-toggle="${pe}">
             <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
             <div class="who">
               <div class="name">${hasName ? escapeHtml(v.customerName) : '<span class="noname">고객명 미등록</span>'}${o.autoSend === false ? '<span class="off-tag">자동발송 OFF</span>' : ""}${failedThisMonth ? '<span class="off-tag" style="color:var(--red);">자동발송 실패</span>' : ""}</div>
@@ -784,7 +784,7 @@
             <div class="autosend-row">
               <span class="label">이 고객 <b>자동 문자 발송</b> ${o.autoSend !== false ? "켜짐" : "꺼짐"}</span>
               <label class="switch">
-                <input type="checkbox" data-autosend="${v.plate}" ${o.autoSend !== false ? "checked" : ""}>
+                <input type="checkbox" data-autosend="${pe}" ${o.autoSend !== false ? "checked" : ""}>
                 <span class="slider"></span>
               </label>
             </div>
@@ -794,13 +794,13 @@
             <div class="autosend-row">
               <span class="label">실패 시 <b>재발송</b> ${o.resendRequested ? "예약됨" : "대기"}</span>
               <label class="switch">
-                <input type="checkbox" data-resend="${v.plate}" ${o.resendRequested ? "checked" : ""}>
+                <input type="checkbox" data-resend="${pe}" ${o.resendRequested ? "checked" : ""}>
                 <span class="slider"></span>
               </label>
             </div>` : ""}
             <div class="acct-toggle">
               <span>결제 계좌</span>
-              <select data-accttoggle="${v.plate}" ${isEditing ? "disabled" : ""}>
+              <select data-accttoggle="${pe}" ${isEditing ? "disabled" : ""}>
                 <option value="corp" ${(o.accountType || "corp") === "corp" ? "selected" : ""}>법인계좌</option>
                 <option value="personal" ${o.accountType === "personal" ? "selected" : ""}>일반계좌</option>
               </select>
@@ -809,16 +809,16 @@
             ${msgBlock}
             <div class="detail-actions">
               ${isEditing ? "" : `
-                <button class="btn" data-copy="${v.plate}">
+                <button class="btn" data-copy="${pe}">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
                   메시지 복사
                 </button>
-                <button class="btn ghost" data-editmsg="${v.plate}">메시지 수정</button>
-                ${customized ? `<button class="btn ghost" data-resetmsg="${v.plate}">템플릿으로 되돌리기</button>` : ""}
-                <button class="btn ${status === "green" ? "" : "primary"}" data-sent="${v.plate}">
+                <button class="btn ghost" data-editmsg="${pe}">메시지 수정</button>
+                ${customized ? `<button class="btn ghost" data-resetmsg="${pe}">템플릿으로 되돌리기</button>` : ""}
+                <button class="btn ${status === "green" ? "" : "primary"}" data-sent="${pe}">
                   ${status === "green" ? "발송 취소" : "발송 완료로 표시"}
                 </button>
-                <span class="copied-tag" data-copytag="${v.plate}" style="display:none;">복사됨</span>
+                <span class="copied-tag" data-copytag="${pe}" style="display:none;">복사됨</span>
               `}
             </div>
           </div>
@@ -1299,10 +1299,12 @@
     $("syncLabel").textContent = label;
   }
 
+  function isPermissionDenied(e){
+    const msg = ((e && e.code) || '') + ' ' + ((e && e.message) || '');
+    return /permission_denied|PERMISSION_DENIED/i.test(msg);
+  }
+
   async function init() {
-    if (!window._fbReady) {
-      await new Promise(resolve => window.addEventListener('fb-ready', resolve, { once: true }));
-    }
     const { ref, get, onValue, set, db } = window._fb;
 
     // settings: seed defaults on first run so account numbers already entered aren't lost
@@ -1314,7 +1316,10 @@
         applySettings(null);
         await set(ref(db, "payment-settings"), { template, company, accounts });
       }
-    } catch (e) { applySettings(null); }
+    } catch (e) {
+      if(isPermissionDenied(e)){ await rejectUnauthorized(); return; }
+      applySettings(null);
+    }
     render();
 
     onValue(ref(db, "payment-settings"), (snap) => { applySettings(snap.val()); render(); });
@@ -1350,30 +1355,48 @@
     });
   }
 
-  // ── 최초 1회 비밀번호 확인 (index.html과 동일한 PIN/저장키 공유) ──────
-  const SITE_PIN = '8990'; // ← index.html의 SITE_PIN과 항상 같은 값으로 맞춰주세요
-  const SITE_AUTH_KEY = 'fleetSitePinOK_v1';
-  window.tryUnlock = function(){
-    const input = document.getElementById('lockPinInput');
+  // ── 실제 Firebase 로그인 (구글 계정으로 로그인, index.html과 같은 허용 목록 공유) ──
+  let _appStarted = false;
+  window.signInWithGoogle = async function(){
     const errEl = document.getElementById('lockErr');
-    if(input.value.trim() === SITE_PIN){
-      localStorage.setItem(SITE_AUTH_KEY, '1');
-      document.getElementById('lockScreen').style.display = 'none';
-      init();
-    }else{
-      errEl.textContent = '비밀번호가 틀렸어요';
-      input.value = '';
-      input.focus();
+    const btn = document.getElementById('googleLoginBtn');
+    errEl.textContent = '';
+    if(btn){ btn.disabled = true; }
+    try{
+      const { auth, GoogleAuthProvider, signInWithPopup } = window._auth;
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    }catch(err){
+      console.error(err);
+      if(err.code === 'auth/popup-closed-by-user'){
+        // 그냥 닫은 것뿐이라 에러 문구 안 띄움
+      }else if(err.code === 'auth/popup-blocked'){
+        errEl.textContent = '팝업이 차단됐어요. 브라우저 팝업 차단을 해제해주세요.';
+      }else{
+        errEl.textContent = '로그인에 실패했어요. 다시 시도해주세요.';
+      }
+    }finally{
+      if(btn){ btn.disabled = false; }
     }
   };
+  async function rejectUnauthorized(){
+    document.getElementById('lockErr').textContent = '이 구글 계정은 등록되지 않았어요. 관리자에게 문의해주세요.';
+    _appStarted = false;
+    try{ await window._auth.signOut(window._auth.auth); }catch(e){}
+  }
   function checkSitePin(){
-    if(localStorage.getItem(SITE_AUTH_KEY) === '1'){
-      document.getElementById('lockScreen').style.display = 'none';
-      init();
-    }else{
-      document.getElementById('lockScreen').style.display = 'flex';
-      document.getElementById('lockPinInput').focus();
-    }
+    const apply = ()=>{
+      if(window._fbUser){
+        document.getElementById('lockScreen').style.display = 'none';
+        if(!_appStarted){
+          _appStarted = true;
+          init();
+        }
+      }else{
+        document.getElementById('lockScreen').style.display = 'flex';
+      }
+    };
+    window.addEventListener('auth-state-changed', apply);
+    if(window._fbUser !== undefined) apply();
   }
   checkSitePin();
 })();
