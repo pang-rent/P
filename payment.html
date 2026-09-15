@@ -30,7 +30,11 @@
   const auth = getAuth(app);
   window._fb = { ref, get, onValue, set, update, push, remove, db };
   window._auth = { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut };
-  getRedirectResult(auth).catch((err)=>console.error('리다이렉트 로그인 결과 확인 실패', err));
+  getRedirectResult(auth).catch((err)=>{
+    console.error('리다이렉트 로그인 결과 확인 실패', err);
+    window._redirectLoginError = err;
+    window.dispatchEvent(new Event('redirect-login-error'));
+  });
   // 구글 계정으로 로그인 (index.html과 동일한 방식, 같은 허용 목록을 공유함)
   onAuthStateChanged(auth, (user)=>{
     window._fbUser = user;
@@ -1384,7 +1388,7 @@
       }else if(err.code === 'auth/popup-blocked'){
         errEl.textContent = '팝업이 차단됐어요. 브라우저 팝업 차단을 해제해주세요.';
       }else{
-        errEl.textContent = '로그인에 실패했어요. 다시 시도해주세요.';
+        errEl.textContent = `로그인 실패: ${err.code || err.message || '알 수 없는 오류'}`;
       }
     }finally{
       if(btn){ btn.disabled = false; }
@@ -1395,6 +1399,13 @@
     _appStarted = false;
     try{ await window._auth.signOut(window._auth.auth); }catch(e){}
   }
+  window.addEventListener('redirect-login-error', ()=>{
+    const err = window._redirectLoginError;
+    const errEl = document.getElementById('lockErr');
+    if(errEl && err){
+      errEl.textContent = `로그인 실패: ${err.code || err.message || '알 수 없는 오류'}`;
+    }
+  });
   function checkSitePin(){
     const apply = ()=>{
       clearTimeout(_checkingRevealTimer);
