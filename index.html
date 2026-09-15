@@ -51,12 +51,15 @@
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getDatabase, ref, get, set, update, onValue, push, remove, runTransaction } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const auth = getAuth(app);
   window._fb = { ref, get, set, update, onValue, push, remove, runTransaction, db };
-  window._auth = { auth, GoogleAuthProvider, signInWithPopup, signOut };
+  window._auth = { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut };
+  // 모바일 브라우저는 팝업 로그인을 막는 경우가 많아서, 리다이렉트로 로그인하고
+  // 돌아왔을 때 이 결과를 받아옵니다(실패해도 로그인 자체를 안 한 상태와 같으므로 조용히 무시).
+  getRedirectResult(auth).catch((err)=>console.error('리다이렉트 로그인 결과 확인 실패', err));
   // 구글 계정으로 로그인해야만 통과되게 바꿨습니다. Firebase가 한 번 로그인하면
   // 이 브라우저에 로그인 상태를 기억해두므로, 재방문 시에는 다시 로그인할 필요가 없습니다.
   // Realtime Database 규칙에서 auth.token.email이 허용 목록에 있는지 확인하므로,
@@ -766,7 +769,12 @@ async function signInWithGoogle(){
   errEl.textContent = '';
   if(btn){ btn.disabled = true; }
   try{
-    const { auth, GoogleAuthProvider, signInWithPopup } = window._auth;
+    const { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect } = window._auth;
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if(isMobile){
+      await signInWithRedirect(auth, new GoogleAuthProvider()); // 페이지가 이동하므로 이 아래는 실행 안 됨
+      return;
+    }
     await signInWithPopup(auth, new GoogleAuthProvider());
     // 성공하면 onAuthStateChanged → auth-state-changed 이벤트가 알아서 화면을 넘겨줌.
     // 등록 안 된 계정이면 이후 loadData()에서 권한 오류로 걸러져서 다시 로그아웃됩니다.
@@ -1091,7 +1099,7 @@ function statusLabel(v){
 
 function isPermissionDenied(e){
   const msg = ((e && e.code) || '') + ' ' + ((e && e.message) || '');
-  return /permission_denied|PERMISSION_DENIED/i.test(msg);
+  return /permission[_-]?denied/i.test(msg);
 }
 
 let _suppressNextRemote = false;

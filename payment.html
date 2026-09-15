@@ -24,12 +24,13 @@
   };
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getDatabase, ref, get, onValue, set, update, push, remove } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const auth = getAuth(app);
   window._fb = { ref, get, onValue, set, update, push, remove, db };
-  window._auth = { auth, GoogleAuthProvider, signInWithPopup, signOut };
+  window._auth = { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut };
+  getRedirectResult(auth).catch((err)=>console.error('리다이렉트 로그인 결과 확인 실패', err));
   // 구글 계정으로 로그인 (index.html과 동일한 방식, 같은 허용 목록을 공유함)
   onAuthStateChanged(auth, (user)=>{
     window._fbUser = user;
@@ -1301,7 +1302,7 @@
 
   function isPermissionDenied(e){
     const msg = ((e && e.code) || '') + ' ' + ((e && e.message) || '');
-    return /permission_denied|PERMISSION_DENIED/i.test(msg);
+    return /permission[_-]?denied/i.test(msg);
   }
 
   async function init() {
@@ -1363,7 +1364,12 @@
     errEl.textContent = '';
     if(btn){ btn.disabled = true; }
     try{
-      const { auth, GoogleAuthProvider, signInWithPopup } = window._auth;
+      const { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect } = window._auth;
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if(isMobile){
+        await signInWithRedirect(auth, new GoogleAuthProvider());
+        return;
+      }
       await signInWithPopup(auth, new GoogleAuthProvider());
     }catch(err){
       console.error(err);
