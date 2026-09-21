@@ -11,7 +11,25 @@
 <meta name="theme-color" content="#0f172a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="장성현황판">
+<meta name="apple-mobile-web-app-title" content="장성현황판" id="appleTitleMeta">
+<script>
+  // ══════════════════════════════════════════════════════════════
+  // ▼▼▼ 새 고객(업체)에 맞게 바꿀 때는 이 블록만 고치면 됩니다 ▼▼▼
+  // (일부러 module 스크립트가 아니라 이 평범한 스크립트에 둡니다 - module은
+  //  항상 나중에 실행되기 때문에, 아래쪽 코드가 이 값을 못 찾는 문제가 생겨서요)
+  // ══════════════════════════════════════════════════════════════
+  window.APP_CONFIG = {
+    appTitle: '장성영업소 차량 현황판',   // 브라우저 탭 제목, 헤더에 뜨는 이름
+    shortName: '장성현황판',              // 홈화면 아이콘 밑에 뜨는 짧은 이름
+    homeBranch: '장성',                   // 기본 지점 이름 (차량 추가 시 기본값, 목록 그룹 이름)
+    longTermBranch: '장기',               // "장기렌트"용 특수 지점/구분 이름 (이 지점은 목록에서 따로 묶임)
+    kakaoMapKey: 'f41df3bf1a6d192adb070ca02219d9f4'      // 직원 위치(📍) 지도용. developers.kakao.com에서 발급받은 JavaScript 키
+  };
+  document.title = window.APP_CONFIG.appTitle;
+  // ══════════════════════════════════════════════════════════════
+  // ▲▲▲ 여기까지만 고치면 됩니다 ▲▲▲
+  // ══════════════════════════════════════════════════════════════
+</script>
 <script>
   // 카카오톡 등 인앱브라우저에서 열렸으면 외부 브라우저(크롬/사파리)로 자동 이탈
   (function(){
@@ -36,7 +54,11 @@
     }
   })();
 </script>
+<script src="fleet-auth.js"></script>
 <script type="module">
+  // APP_CONFIG는 이 파일 맨 위 첫 번째 <script>에서 이미 설정했습니다.
+  // (module 스크립트는 항상 나중에 실행되므로, 값 자체는 그 앞쪽 스크립트에 둡니다)
+  const APP_CONFIG = window.APP_CONFIG;
   // ▼▼▼ Firebase 콘솔(console.firebase.google.com)에서 프로젝트 생성 후
   //     '프로젝트 설정 > 일반 > 내 앱 > SDK 설정 및 구성'에서 이 값들을 그대로 복붙하세요.
   //     Realtime Database도 만들고 '테스트 모드'로 시작하면 됩니다.
@@ -49,27 +71,30 @@
     messagingSenderId: "390123603041",
     appId: "1:390123603041:web:35bbc4059db12d586e5620"
   };
+  // ══════════════════════════════════════════════════════════════
+  // ▲▲▲ 위 firebaseConfig만 고치면 됩니다 (업체명 등은 파일 맨 위 APP_CONFIG 참고) ▲▲▲
+  // ══════════════════════════════════════════════════════════════
+  // 화면에 업체명 반영 (요소가 없을 수도 있으니 안전하게 확인 후 설정)
+  (function(){
+    const t = document.getElementById('appTitle');
+    if(t) t.textContent = '🚗 ' + APP_CONFIG.appTitle;
+    const m = document.getElementById('appleTitleMeta');
+    if(m) m.setAttribute('content', APP_CONFIG.shortName);
+  })();
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getDatabase, ref, get, set, update, onValue, push, remove, runTransaction } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const auth = getAuth(app);
   window._fb = { ref, get, set, update, onValue, push, remove, runTransaction, db };
-  window._auth = { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut };
-  // 예전 버전에서 리다이렉트 로그인 도중이던 사람을 위해 결과만 받아두고,
-  // 실패해도(=저장공간 분리로 세션 유실) 로그인을 안 한 상태와 같으므로 화면에 오류를 띄우지 않고 무시합니다.
-  getRedirectResult(auth).catch((err)=>{
-    console.warn('리다이렉트 로그인 결과 확인 실패(무시함)', err);
-  });
-  // 구글 계정으로 로그인해야만 통과되게 바꿨습니다. Firebase가 한 번 로그인하면
-  // 이 브라우저에 로그인 상태를 기억해두므로, 재방문 시에는 다시 로그인할 필요가 없습니다.
-  // Realtime Database 규칙에서 auth.token.email이 허용 목록에 있는지 확인하므로,
-  // 아무 구글 계정이나 로그인은 되지만 목록에 없는 계정은 데이터를 못 읽고 못 씁니다.
-  onAuthStateChanged(auth, (user)=>{
-    window._fbUser = user;
-    window._fbReady = !!user;
-    window.dispatchEvent(new Event('auth-state-changed'));
+  window._auth = { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged };
+  // 이메일/비밀번호로 로그인하고, 소속 업체(companies/{id})를 찾는 일은
+  // FleetAuth 모듈(fleet-auth.js)이 담당합니다. 업체 확인까지 끝나면 onReady가 불립니다.
+  FleetAuth.init({
+    fb: window._fb,
+    auth: window._auth,
+    onReady: function(){ startApp(); }
   });
 </script>
 <style>
@@ -107,9 +132,37 @@
     padding:10px 14px 7px;
     border-bottom:1px solid var(--line);
   }
-  header .title-row{display:flex;justify-content:center;align-items:center;gap:8px;text-align:center;}
-  header h1{font-size:17px;margin:0;font-weight:700;}
+  header .title-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;}
+  header .title-row .title-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+  header h1{font-size:17px;margin:0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   header .date{font-size:11px;color:var(--sub);}
+  .chat-badge{
+    position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;
+    font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;
+    display:flex;align-items:center;justify-content:center;padding:0 4px;
+  }
+  .chat-msg{margin-bottom:12px;display:flex;flex-direction:column;}
+  .chat-msg .meta{font-size:11px;color:var(--sub);margin-bottom:3px;}
+  .chat-msg .bubble{
+    background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+    padding:9px 12px;font-size:14px;line-height:1.5;white-space:pre-wrap;
+    word-break:break-word;align-self:flex-start;max-width:85%;
+  }
+  .chat-msg.mine{align-items:flex-end;}
+  .chat-msg.mine .bubble{background:rgba(245,166,35,.16);border-color:var(--amber);align-self:flex-end;}
+  .chat-msg .del-msg{
+    background:none;border:none;color:var(--red);font-size:11px;
+    padding:2px 4px;cursor:pointer;align-self:flex-end;margin-top:2px;
+  }
+  .chat-msg.system{align-items:center;}
+  .chat-msg .sysbubble{
+    background:rgba(52,211,153,.10);border-color:var(--green);color:var(--text);
+    align-self:center;font-size:13px;max-width:92%;
+  }
+  .chat-daysep{
+    text-align:center;color:var(--sub);font-size:11px;margin:14px 0 10px;
+    position:relative;
+  }
   .history-btn{
     background:var(--panel2);border:1px solid var(--line);color:var(--blue);
     border-radius:8px;width:32px;height:32px;font-size:15px;flex-shrink:0;
@@ -413,34 +466,116 @@
 </head>
 <body>
 
-<div class="lock-screen" id="lockScreen">
-  <div id="lockChecking" style="opacity:0;">
-    <div class="lock-icon">🚗</div>
-    <p style="margin-top:10px;">불러오는 중...</p>
+<!-- ═══════════════════════════════════════════════════
+     업체 가입/로그인 화면 (FleetAuth 모듈과 세트)
+     이 블록을 <body> 바로 다음에 붙여넣으세요.
+     ═══════════════════════════════════════════════════ -->
+<style>
+  .auth-screen{
+    position:fixed;inset:0;background:var(--bg);z-index:1000;
+    display:none;flex-direction:column;align-items:center;justify-content:center;
+    padding:24px;overflow-y:auto;
+  }
+  .auth-box{width:100%;max-width:360px;display:none;flex-direction:column;gap:12px;text-align:center;}
+  .auth-screen .auth-logo{font-size:38px;margin-bottom:2px;}
+  .auth-screen h2{margin:0;font-size:19px;color:var(--text);}
+  .auth-screen .auth-sub{color:var(--sub);font-size:13px;margin-bottom:6px;line-height:1.5;}
+  .auth-screen input{
+    width:100%;padding:14px;border-radius:10px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);font-size:15px;box-sizing:border-box;
+  }
+  .auth-screen input::placeholder{color:var(--sub);}
+  .auth-btn{
+    width:100%;padding:15px;border-radius:10px;border:none;
+    background:var(--amber);color:#1a1a1a;font-size:15px;font-weight:700;cursor:pointer;
+  }
+  .auth-btn:disabled{opacity:.5;}
+  .auth-btn.sub{background:var(--panel2);color:var(--text);border:1px solid var(--line);}
+  .auth-link{
+    background:none;border:none;color:var(--blue);font-size:13px;cursor:pointer;
+    padding:6px;text-decoration:underline;
+  }
+  .auth-err{color:var(--red);font-size:13px;min-height:18px;line-height:1.4;}
+  .auth-divider{color:var(--sub);font-size:12px;margin:2px 0;}
+</style>
+
+<div class="auth-screen" id="authScreen">
+
+  <!-- 로그인 -->
+  <div class="auth-box" id="authLogin">
+    <div class="auth-logo">🚗</div>
+    <h2>차량 현황판</h2>
+    <div class="auth-sub">이메일로 로그인해주세요</div>
+    <input type="email" id="authLoginEmail" placeholder="이메일" autocomplete="username"
+           onkeydown="if(event.key==='Enter')document.getElementById('authLoginPw').focus()">
+    <input type="password" id="authLoginPw" placeholder="비밀번호" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter')FleetAuth.doLogin()">
+    <button class="auth-btn" id="authLoginBtn" onclick="FleetAuth.doLogin()">로그인</button>
+    <div class="auth-err" id="authErr"></div>
+    <div class="auth-divider">— 처음 오셨나요? —</div>
+    <button class="auth-btn sub" onclick="FleetAuth.showPanel('authSignup')">새 업체로 시작하기</button>
+    <button class="auth-link" onclick="FleetAuth.showPanel('authJoin')">초대코드를 받았어요</button>
   </div>
-  <div id="lockLoginBox" style="display:none;flex-direction:column;align-items:center;gap:14px;">
-    <div class="lock-icon">🔒</div>
-    <h2>장성영업소 차량 현황판</h2>
-    <p>등록된 구글 계정으로 로그인하면 이 기기에서는 계속 자동으로 열려요</p>
-    <button id="googleLoginBtn" onclick="signInWithGoogle()" style="display:flex;align-items:center;justify-content:center;gap:8px;">
-      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.5 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.1-2.5-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.9 19 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.5 3 24 3 16.3 3 9.7 7.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.3 0 10.1-2 13.7-5.4l-6.3-5.3C29.3 36 26.8 37 24 37c-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.6 40.6 16.3 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.3 5.3C40.9 36.5 44 30.9 44 24c0-1.4-.1-2.5-.4-3.5z"/></svg>
-      Google 계정으로 로그인
-    </button>
-    <div class="lock-err" id="lockErr"></div>
+
+  <!-- 업체 새로 만들기 -->
+  <div class="auth-box" id="authSignup">
+    <div class="auth-logo">🏢</div>
+    <h2>새 업체 등록</h2>
+    <div class="auth-sub">업체를 등록하면 관리자가 됩니다.<br>직원은 초대코드로 추가할 수 있어요.</div>
+    <input type="text" id="authCompanyName" placeholder="업체명 (예: 장성영업소)">
+    <input type="email" id="authSignupEmail" placeholder="이메일" autocomplete="username">
+    <input type="password" id="authSignupPw" placeholder="비밀번호 (6자 이상)" autocomplete="new-password"
+           onkeydown="if(event.key==='Enter')FleetAuth.doSignupCompany()">
+    <button class="auth-btn" id="authSignupBtn" onclick="FleetAuth.doSignupCompany()">업체 등록하고 시작</button>
+    <div class="auth-err" id="authErr2"></div>
+    <button class="auth-link" onclick="FleetAuth.showPanel('authLogin')">← 로그인으로 돌아가기</button>
   </div>
+
+  <!-- 초대코드로 참여 -->
+  <div class="auth-box" id="authJoin">
+    <div class="auth-logo">🎟️</div>
+    <h2>초대코드로 참여</h2>
+    <div class="auth-sub">업체 관리자에게 받은 6자리 코드를 입력하세요.</div>
+    <input type="text" id="authJoinCode" placeholder="초대코드 (예: K7M2QX)" autocapitalize="characters"
+           style="text-transform:uppercase;letter-spacing:2px;text-align:center;font-weight:700;">
+    <input type="email" id="authJoinEmail" placeholder="이메일" autocomplete="username">
+    <input type="password" id="authJoinPw" placeholder="비밀번호 (6자 이상)" autocomplete="new-password"
+           onkeydown="if(event.key==='Enter')FleetAuth.doJoinWithCode()">
+    <button class="auth-btn" id="authJoinBtn" onclick="FleetAuth.doJoinWithCode()">참여하기</button>
+    <div class="auth-err" id="authErr3"></div>
+    <button class="auth-link" onclick="FleetAuth.showPanel('authLogin')">← 로그인으로 돌아가기</button>
+  </div>
+
+  <!-- 로그인은 됐지만 소속 업체가 없을 때 -->
+  <div class="auth-box" id="authChoose">
+    <div class="auth-logo">👋</div>
+    <h2>거의 다 됐어요</h2>
+    <div class="auth-sub">아직 소속된 업체가 없습니다.<br>새 업체를 만들거나, 초대코드로 참여해주세요.</div>
+    <button class="auth-btn" onclick="FleetAuth.showPanel('authSignup')">새 업체 등록하기</button>
+    <button class="auth-btn sub" onclick="FleetAuth.showPanel('authJoin')">초대코드로 참여하기</button>
+    <div class="auth-err" id="authErr4"></div>
+    <button class="auth-link" onclick="FleetAuth.doLogout()">다른 계정으로 로그인</button>
+  </div>
+
 </div>
+
 
 <header>
   <div class="title-row">
-    <div>
-      <h1>🚗 장성영업소 차량 현황판</h1>
+    <div></div>
+    <div style="min-width:0;max-width:100%;text-align:center;">
+      <h1 id="appTitle">🚗 장성영업소 차량 현황판</h1>
       <div class="date" id="dateLine"></div>
     </div>
-    <button class="history-btn" onclick="openHistoryModal()" title="변경기록">🕒</button>
-    <button class="history-btn" onclick="openStaffModal()" title="로그인 허용 계정 관리">👥</button>
+    <div class="title-actions" style="justify-self:end;">
+      <button class="history-btn" onclick="openHistoryModal()" title="변경기록">🕒</button>
+      <button class="history-btn" onclick="openStaffModal()" title="직원 관리">👥</button>
+    </div>
   </div>
   <div class="header-actions">
-    <a class="link-btn telegram" href="intent://t.me/+zgPlZTwlkk8wYWVl#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Ft.me%2F%2BzgPlZTwlkk8wYWVl;end">📱 텔레그램방</a>
+    <button class="link-btn telegram" onclick="openChatModal()" style="position:relative;">💬 메신저<span class="chat-badge" id="chatBadge" style="display:none;top:-6px;right:-6px;">0</span></button>
+    <button class="link-btn" style="color:var(--pink,#f472b6);border:none;background:var(--panel2);position:relative;" onclick="openLocModal()">📍 동료위치보기<span class="chat-badge" id="locBadge" style="display:none;top:-6px;right:-6px;">0</span></button>
+    <a class="link-btn" style="color:var(--blue);" href="intent://t.me/+zgPlZTwlkk8wYWVl#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Ft.me%2F%2BzgPlZTwlkk8wYWVl;end">📱 텔레그램방</a>
     <a class="link-btn kakao" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.kakao.talk;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.kakao.talk;end">💬 카카오톡</a>
     <a class="link-btn app" href="intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.Rentcar.heaven819.gcmpush;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.Rentcar.heaven819.gcmpush;end">🚗 팡팡렌트카</a>
     <button class="link-btn" style="color:var(--purple);border:none;background:var(--panel2);" onclick="openSchedModal()">📅 일정</button>
@@ -462,6 +597,10 @@
 <button class="fab" id="fabAdd" onclick="openAddModal()">+</button>
 
 <main id="main"></main>
+
+<div style="text-align:center;padding:8px 20px 36px;">
+  <button class="link-btn" style="color:var(--sub);background:var(--panel2);border:1px solid var(--line);" onclick="logoutApp()">🚪 로그아웃</button>
+</div>
 
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -763,18 +902,73 @@
 
 <div class="modal-bg" id="staffModalBg">
   <div class="modal">
-    <h3>👥 로그인 허용 계정 관리</h3>
-    <div class="sub">여기 등록된 구글 계정만 로그인해서 현황판/결제알림을 볼 수 있어요. 등록된 사람만 새 사람을 추가할 수 있습니다.</div>
+    <h3>👥 직원 관리</h3>
+    <div class="sub">이 업체에 속한 직원 목록입니다. 새 직원은 초대코드로 참여시킬 수 있어요.</div>
     <div id="staffList"><div class="empty">불러오는 중...</div></div>
-    <div class="field" style="margin-top:14px;">
-      <label>새 구글 계정(이메일) 추가</label>
-      <div style="display:flex;gap:8px;">
-        <input id="staffNewEmail" placeholder="예: name@gmail.com" style="flex:1;" onkeydown="if(event.key==='Enter')addStaffEmail()">
-        <button class="btn-save" style="width:56px;padding:0;font-size:20px;" onclick="addStaffEmail()">+</button>
+
+    <div id="staffInviteBox" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">
+      <label style="font-size:13px;color:var(--sub);">새 직원 초대</label>
+      <div style="font-size:12px;color:var(--sub);margin:6px 0 10px;line-height:1.5;">
+        초대코드를 만들어서 직원에게 알려주세요. 직원이 앱에서 "초대코드를 받았어요"를 눌러 가입하면 자동으로 이 업체에 합류합니다.
+      </div>
+      <button class="btn-save" style="width:100%;padding:13px;font-size:14px;font-weight:700;border-radius:10px;" onclick="createInviteCode()">
+        + 초대코드 만들기
+      </button>
+      <div id="staffInviteResult" style="display:none;margin-top:12px;text-align:center;">
+        <div style="font-size:12px;color:var(--sub);margin-bottom:6px;">아래 코드를 직원에게 전달하세요</div>
+        <div id="staffInviteCode" style="font-size:26px;font-weight:800;letter-spacing:4px;color:var(--amber);font-family:ui-monospace,Menlo,Consolas,monospace;"></div>
+        <button class="btn-cancel" style="margin-top:10px;padding:10px 18px;font-size:13px;border-radius:8px;" onclick="copyInviteCode()">📋 복사하기</button>
       </div>
     </div>
+
     <div class="modal-actions" style="margin-top:14px;">
       <button class="btn-cancel" style="width:100%;padding:15px;font-size:15px;font-weight:700;border-radius:12px;" onclick="closeStaffModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="chatModalBg">
+  <div class="sched-modal-shell">
+    <div class="sched-modal-scroll" id="chatScroll">
+      <h3>💬 직원 채팅</h3>
+      <div class="sub">이 업체 직원들끼리 나누는 대화입니다. 최근 200개까지 보관돼요.</div>
+      <div id="chatList"><div class="empty">불러오는 중...</div></div>
+    </div>
+    <div class="modal-footer-inflow">
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input id="chatInput" placeholder="메시지를 입력하세요" maxlength="2000"
+               style="flex:1;padding:13px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:14px;"
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}">
+        <button class="btn-save" id="chatSendBtn" style="width:64px;padding:0;font-size:14px;font-weight:700;border-radius:10px;" onclick="sendChatMessage()">전송</button>
+      </div>
+      <button class="btn-cancel" onclick="closeChatModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="locModalBg">
+  <div class="sched-modal-shell">
+    <div class="sched-modal-scroll" id="locScroll">
+      <h3>📍 직원 위치</h3>
+      <div class="sub">위치 공유를 켠 직원끼리만 서로 위치가 보여요. 10분 넘게 갱신이 없으면 목록에서 빠져요.</div>
+
+      <div id="locConsentBox" style="display:none;background:var(--panel2);border-radius:10px;padding:14px;margin-bottom:14px;">
+        <label style="display:flex;align-items:flex-start;gap:8px;color:var(--text);font-size:13px;line-height:1.6;">
+          <input type="checkbox" id="locConsentCheck" style="margin-top:3px;">
+          <span>업무시간(09:00~18:00) 동안 동료 직원에게 내 위치가 공유되는 것에 동의합니다. 업무시간 외에는 자동으로 꺼지고, 언제든 직접 끌 수 있으며 끄면 위치는 즉시 삭제됩니다.</span>
+        </label>
+        <button class="btn-save" style="width:100%;padding:11px;font-size:13px;font-weight:700;border-radius:9px;margin-top:10px;" onclick="agreeLocationConsent()">동의하고 계속</button>
+      </div>
+
+      <div id="locMainBox" style="display:none;">
+        <div id="locStatusMsg" style="font-size:12px;color:var(--sub);text-align:center;margin-bottom:10px;"></div>
+        <div id="locMap" style="width:100%;height:220px;border-radius:12px;overflow:hidden;margin-bottom:14px;background:var(--panel2);"></div>
+        <div id="locList"><div class="empty">불러오는 중...</div></div>
+      </div>
+    </div>
+    <div class="modal-footer-inflow">
+      <button class="btn-save" id="locToggleBtn" style="width:100%;padding:13px;font-size:14px;font-weight:700;border-radius:10px;margin-bottom:8px;display:none;" onclick="toggleLocationShare()">📍 내 위치 공유 시작</button>
+      <button class="btn-cancel" onclick="closeLocModal()">닫기</button>
     </div>
   </div>
 </div>
@@ -782,88 +976,26 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const STORAGE_KEY = 'fleet-vehicles-jangseong-v1';
+// ══════════════════════════════════════════════════════════════
+// 모든 데이터는 companies/{업체ID}/ 아래에 저장됩니다.
+// P('vehicles') → 'companies/c_abc123/vehicles' 처럼 경로를 만들어주는 함수.
+// 이렇게 해두면 업체마다 데이터가 완전히 분리돼서 서로 안 보입니다.
+// ══════════════════════════════════════════════════════════════
+function P(sub){
+  if(!window.COMPANY_ID) throw new Error('아직 업체 정보가 준비되지 않았습니다.');
+  return 'companies/' + window.COMPANY_ID + '/' + sub;
+}
+const LEGACY_STORAGE_KEY = 'fleet-vehicles-jangseong-v1'; // 예전 단일업체 시절 경로 (이전 도구에서만 사용)
+const LEGACY_HISTORY_KEY = 'history-jangseong-v1';
+const HOME_BRANCH = window.APP_CONFIG.homeBranch;       // 기본 지점명 (예: 장성)
+const LONG_BRANCH = window.APP_CONFIG.longTermBranch;   // 장기렌트 지점/구분명 (예: 장기)
 
-// ── 실제 Firebase 로그인 (구글 계정으로 로그인) ──
-// Firebase 콘솔 → Authentication → 로그인 방법 → Google 켜기.
-// 그리고 Authentication → Settings → 승인된 도메인에 이 사이트 주소
-// (pang-rent.github.io)가 들어있는지 확인해주세요. 없으면 로그인 팝업이 안 떠요.
-// 아무 구글 계정이나 로그인 자체는 되지만, Realtime Database 규칙에서
-// auth.token.email이 허용 목록에 없으면 데이터를 못 읽고 못 씁니다(아래 signInWithGoogle 참고).
-let _appStarted = false;
-async function signInWithGoogle(){
-  const errEl = document.getElementById('lockErr');
-  const btn = document.getElementById('googleLoginBtn');
-  errEl.textContent = '';
-  if(btn){ btn.disabled = true; }
-  try{
-    const { auth, GoogleAuthProvider, signInWithPopup } = window._auth;
-    // 예전에는 모바일에서 signInWithRedirect를 썼는데, 최신 브라우저(크롬/삼성인터넷/사파리)가
-    // 사이트별로 저장공간을 분리(storage partitioning)하면서 로그인하고 돌아와도 세션을 잃어버려
-    // "Unable to process request due to missing initial state" 오류가 납니다.
-    // 그래서 PC/모바일 구분 없이 팝업 방식으로 통일했습니다.
-    await signInWithPopup(auth, new GoogleAuthProvider());
-    // 성공하면 onAuthStateChanged → auth-state-changed 이벤트가 알아서 화면을 넘겨줌.
-    // 등록 안 된 계정이면 이후 loadData()에서 권한 오류로 걸러져서 다시 로그아웃됩니다.
-  }catch(err){
-    console.error(err);
-    if(err.code === 'auth/popup-closed-by-user'){
-      // 사용자가 그냥 팝업을 닫은 것뿐이라 에러 문구 안 띄움
-    }else if(err.code === 'auth/popup-blocked'){
-      errEl.textContent = '팝업이 차단됐어요. 브라우저 팝업 차단을 해제해주세요.';
-    }else{
-      errEl.textContent = `로그인 실패: ${err.code || err.message || '알 수 없는 오류'}`;
-    }
-  }finally{
-    if(btn){ btn.disabled = false; }
-  }
-}
-window.addEventListener('redirect-login-error', ()=>{
-  const err = window._redirectLoginError;
-  const errEl = document.getElementById('lockErr');
-  if(errEl && err){
-    errEl.textContent = `로그인 실패: ${err.code || err.message || '알 수 없는 오류'}`;
-  }
-});
-function checkSitePin(){
-  const apply = ()=>{
-    clearTimeout(_checkingRevealTimer);
-    if(window._fbUser){
-      document.getElementById('lockScreen').style.display = 'none';
-      if(!_appStarted){
-        _appStarted = true;
-        startApp();
-      }
-    }else{
-      document.getElementById('lockScreen').style.display = 'flex';
-      document.getElementById('lockChecking').style.display = 'none';
-      document.getElementById('lockLoginBox').style.display = 'flex';
-    }
-  };
-  // 확인이 금방 끝나면(이미 로그인된 기기) 이 로딩 표시는 아예 안 보이게 하고,
-  // 0.35초 넘게 걸릴 때만 "불러오는 중"을 살짝 보여줘서 화면이 멈춘 것처럼 안 보이게 함
-  const _checkingRevealTimer = setTimeout(()=>{
-    const el = document.getElementById('lockChecking');
-    if(el) el.style.opacity = '1';
-  }, 350);
-  window.addEventListener('auth-state-changed', apply);
-  if(window._fbUser !== undefined) apply(); // 이벤트가 이미 지나갔을 경우 대비
-  // 안전장치: 4초가 지나도 로그인 여부 확인이 안 끝나면(느린 네트워크, 브라우저 문제 등)
-  // '불러오는 중'에 계속 멈춰있지 않도록 로그인 버튼을 강제로 보여줌
-  setTimeout(()=>{
-    if(window._fbUser === undefined){
-      console.warn('로그인 상태 확인이 지연되어 로그인 화면을 강제로 표시합니다.');
-      document.getElementById('lockScreen').style.display = 'flex';
-      document.getElementById('lockChecking').style.display = 'none';
-      document.getElementById('lockLoginBox').style.display = 'flex';
-    }
-  }, 4000);
-}
-// 등록되지 않은 구글 계정으로 로그인했을 때(=권한 없음) 다시 로그아웃시키고 안내
-async function rejectUnauthorized(){
-  document.getElementById('lockErr').textContent = '이 구글 계정은 등록되지 않았어요. 관리자에게 문의해주세요.';
-  _appStarted = false;
-  try{ await window._auth.signOut(window._auth.auth); }catch(e){}
+// ── 로그인/업체 확인은 FleetAuth 모듈이 담당합니다 (fleet-auth.js) ──
+// 로그인 + 소속 업체 확인이 끝나면 FleetAuth가 startApp()을 불러줍니다.
+// 아래는 앱 안에서 쓰는 로그아웃 버튼용.
+function logoutApp(){
+  if(!confirm('로그아웃할까요?')) return;
+  FleetAuth.doLogout();
 }
 
 // ── 비밀번호 잠금 제거됨 (누구나 조회/수정 가능) ─────────────
@@ -871,21 +1003,8 @@ function ensureEditUnlocked(){
   return true;
 }
 
-const SEED = [
-{no:'1',plate:'105하8495',branch:'장성',cls:'대형',model:'그랜저GN7',fuel:'LPG',status:'',extra:'자차:o',type:'보험',note:'수완현대 싼타페',amount:null,startDate:null},
-{no:'2',plate:'105하9581',branch:'장성',cls:'소형',model:'셀토스',fuel:'가솔린',status:'',extra:'자차:o·26세·IMS관제',type:'',note:'한진서비스',amount:null,startDate:null},
-{no:'3',plate:'105하9584',branch:'장성',cls:'중형',model:'쏘나타디엣지',fuel:'LPG',status:'',extra:'자차:o',type:'보험',note:'1급 셀토스',amount:null,startDate:null},
-{no:'4',plate:'105하9585',branch:'장성',cls:'중형',model:'쏘나타디엣지',fuel:'LPG',status:'',extra:'자차:o',type:'보험',note:'1급 아반떼',amount:null,startDate:null},
-{no:'5',plate:'105하9587',branch:'장성',cls:'경형',model:'캐스퍼',fuel:'가솔린',status:'',extra:'자차:o',type:'보험',note:'윤상 모닝',amount:null,startDate:null},
-{no:'6',plate:'105하9588',branch:'장성',cls:'대형',model:'그랜저 GN',fuel:'LPG',status:'대기',extra:'자차:o',type:'',note:'차고지',amount:null,startDate:null},
-{no:'9',plate:'105하9592',branch:'장성',cls:'중형',model:'K5',fuel:'LPG',status:'',extra:'자차:o',type:'서비스',note:'윤상 카니발',amount:null,startDate:null},
-{no:'10',plate:'105하9593',branch:'장성',cls:'중형',model:'K5',fuel:'LPG',status:'준비중',extra:'자차:o',type:'',note:'장성',amount:null,startDate:null},
-{no:'11',plate:'105하9598',branch:'장성',cls:'대형',model:'쏘렌토',fuel:'가솔린',status:'준비중',extra:'자차:o',type:'',note:'장성',amount:null,startDate:null},
-{no:'13',plate:'105하9738',branch:'장성',cls:'대형',model:'펠리세이드',fuel:'가솔린',status:'',extra:'자차:o',type:'보험',note:'수완현대 쏘렌토',amount:null,startDate:null},
-{no:'7',plate:'105하9590',branch:'장기',cls:'대형',model:'싼타페',fuel:'LPG',status:'2일',extra:'자차:o·26세임직원',type:'장기',note:'편안',amount:110,startDate:null},
-{no:'8',plate:'105하9591',branch:'장기',cls:'대형',model:'싼타페',fuel:'LPG',status:'5일',extra:'자차:o·26세임직원',type:'장기',note:'편안',amount:110,startDate:null},
-{no:'12',plate:'105하9735',branch:'장기',cls:'소형',model:'셀토스',fuel:'',status:'26일',extra:'자차:o·26세임직원',type:'장기',note:'편안',amount:60,startDate:null},
-];
+// (예전 장성영업소 예시 차량 데이터(SEED)는 제거했습니다.
+//  새 업체는 빈 상태로 시작하고, 기존 데이터는 migrate.html로 옮깁니다.)
 
 let vehicles = [];
 
@@ -1158,22 +1277,20 @@ function isPermissionDenied(e){
 let _suppressNextRemote = false;
 
 async function loadData(){
-  const { ref, get, set, db } = window._fb;
+  const { ref, get, db } = window._fb;
   try{
-    const snap = await get(ref(db, STORAGE_KEY));
-    if(snap.exists()){
-      vehicles = snap.val();
-    } else {
-      vehicles = SEED.slice();
-      await set(ref(db, STORAGE_KEY), vehicles);
-    }
+    const snap = await get(ref(db, P('vehicles')));
+    // ▼ 중요: 새로 가입한 업체는 "빈 상태"로 시작해야 합니다.
+    //   예전에는 여기서 SEED(장성영업소 예시 차량)를 자동으로 넣었는데,
+    //   그러면 다른 업체가 가입했을 때 모르는 차량이 잔뜩 들어가버립니다.
+    vehicles = snap.exists() ? (snap.val() || []) : [];
   }catch(e){
     console.error(e);
     if(isPermissionDenied(e)){
-      await rejectUnauthorized();
+      showToast('이 업체 데이터에 접근 권한이 없어요. 관리자에게 문의해주세요.');
       return false;
     }
-    vehicles = SEED.slice();
+    vehicles = [];
     showToast('연결 실패 - Firebase 설정을 확인하세요');
   }
   autoFlagReturnDue();
@@ -1192,9 +1309,9 @@ const HISTORY_MAX = 30;
 async function snapshotHistory(){
   const { ref, get, set, push, db } = window._fb;
   try{
-    const prevSnap = await get(ref(db, STORAGE_KEY));
+    const prevSnap = await get(ref(db, P('vehicles')));
     if(!prevSnap.exists()) return;
-    const newRef = push(ref(db, HISTORY_KEY));
+    const newRef = push(ref(db, P('history')));
     await set(newRef, { vehicles: prevSnap.val(), savedAt: Date.now() });
     await pruneHistory();
   }catch(e){
@@ -1204,13 +1321,13 @@ async function snapshotHistory(){
 
 async function pruneHistory(){
   const { ref, get, remove, db } = window._fb;
-  const snap = await get(ref(db, HISTORY_KEY));
+  const snap = await get(ref(db, P('history')));
   if(!snap.exists()) return;
   const keys = Object.keys(snap.val()).sort(); // push 키는 시간순 정렬됨
   if(keys.length > HISTORY_MAX){
     const excess = keys.slice(0, keys.length - HISTORY_MAX);
     for(const k of excess){
-      await remove(ref(db, HISTORY_KEY + '/' + k));
+      await remove(ref(db, P('history/' + k)));
     }
   }
 }
@@ -1226,7 +1343,7 @@ async function persist(change){
     _suppressNextRemote = true;
     await snapshotHistory(); // 덮어쓰기 전 이전 상태를 변경 기록에 먼저 남김
     if(change){
-      const result = await runTransaction(ref(db, STORAGE_KEY), (current)=>{
+      const result = await runTransaction(ref(db, P('vehicles')), (current)=>{
         let list = Array.isArray(current) ? current.slice() : [];
         const upsert = (v)=>{
           const idx = list.findIndex(x=>x && x.plate===v.plate);
@@ -1244,7 +1361,7 @@ async function persist(change){
       vehicles = (result.snapshot.val()) || [];
       render();
     }else{
-      await set(ref(db, STORAGE_KEY), vehicles);
+      await set(ref(db, P('vehicles')), vehicles);
     }
     showToast('저장됨 · 다른 직원 화면에도 실시간 반영됩니다');
   }catch(e){
@@ -1255,7 +1372,7 @@ async function persist(change){
 
 function startRealtimeSync(){
   const { ref, onValue, db } = window._fb;
-  onValue(ref(db, STORAGE_KEY), (snap)=>{
+  onValue(ref(db, P('vehicles')), (snap)=>{
     if(_suppressNextRemote){ _suppressNextRemote = false; return; }
     if(snap.exists()){
       vehicles = snap.val();
@@ -1304,7 +1421,7 @@ function matchesDate(sched, dateStr){
 async function loadSchedules(){
   const { ref, get, db } = window._fb;
   try{
-    const snap = await get(ref(db, 'schedules'));
+    const snap = await get(ref(db, P('schedules')));
     schedules = snap.exists() ? snap.val() : {};
   }catch(e){
     console.error(e);
@@ -1314,7 +1431,7 @@ async function loadSchedules(){
 
 function startScheduleSync(){
   const { ref, onValue, db } = window._fb;
-  onValue(ref(db, 'schedules'), (snap)=>{
+  onValue(ref(db, P('schedules')), (snap)=>{
     schedules = snap.exists() ? snap.val() : {};
     renderSchedBanner();
     if(document.getElementById('schedModalBg').classList.contains('open')){
@@ -1336,10 +1453,10 @@ async function toggleScheduleDone(key, dateStr){
   if(sched.repeat){
     const cur = !!(sched.completedDates && sched.completedDates[dateStr]);
     // 완료 시각을 날짜별로 기록 (취소 시엔 null)
-    await set(ref(db, `schedules/${key}/completedDates/${dateStr}`), cur ? null : new Date().toISOString());
+    await set(ref(db, P(`schedules/${key}/completedDates/${dateStr}`)), cur ? null : new Date().toISOString());
   }else{
     const next = !sched.done;
-    await update(ref(db, `schedules/${key}`), { done: next, doneAt: next ? new Date().toISOString() : null });
+    await update(ref(db, P(`schedules/${key}`)), { done: next, doneAt: next ? new Date().toISOString() : null });
   }
 }
 
@@ -1397,7 +1514,7 @@ function escapeHtml(s){
 // 모달을 열 때마다 히스토리를 하나 쌓아두고, 뒤로가기가 오면 페이지를 벗어나는
 // 대신 열려있는 모달만 닫히게 합니다. 앱 내 닫기/취소/저장 버튼으로 닫을 때도
 // 쌓아둔 히스토리를 같이 되돌려서 스택이 계속 쌓이지 않게 맞춰줍니다.
-const MODAL_IDS = ['modalBg','schedModalBg','addModalBg','historyModalBg','staffModalBg'];
+const MODAL_IDS = ['modalBg','schedModalBg','addModalBg','historyModalBg','staffModalBg','chatModalBg','locModalBg'];
 function pushModalHistoryState(id){
   history.pushState({ modalId: id }, '');
 }
@@ -1494,10 +1611,10 @@ async function addSchedule(){
     const prev = schedules[editingScheduleKey] || {};
     if(prev.done !== undefined) payload.done = prev.done;
     if(prev.completedDates !== undefined) payload.completedDates = prev.completedDates;
-    await set(ref(db, 'schedules/'+editingScheduleKey), payload);
+    await set(ref(db, P('schedules/'+editingScheduleKey)), payload);
     showToast('일정이 수정되었습니다');
   }else{
-    await push(ref(db, 'schedules'), payload);
+    await push(ref(db, P('schedules')), payload);
     showToast('일정이 추가되었습니다');
   }
 
@@ -1515,7 +1632,7 @@ async function deleteSchedule(key){
   if(!confirm(`${label} 삭제할까요? 삭제하면 되돌릴 수 없습니다.`)) return;
   if(editingScheduleKey === key) exitEditMode();
   const { ref, remove, db } = window._fb;
-  await remove(ref(db, 'schedules/'+key));
+  await remove(ref(db, P('schedules/'+key)));
   showToast('일정이 삭제되었습니다');
 }
 
@@ -1634,7 +1751,7 @@ function renderStats(){
   const total = vehicles.length;
   const idle = vehicles.filter(v=>v.status==='대기').length;
   const prep = vehicles.filter(v=>v.status==='준비중').length;
-  const longTerm = vehicles.filter(v=>v.type==='장기');
+  const longTerm = vehicles.filter(v=>v.type===LONG_BRANCH);
   const longCount = longTerm.length;
   const longAmount = longTerm.reduce((sum,v)=> sum + (Number(v.amount)||0), 0);
   // ▼ 수정: 운행중 카운트에서 장기렌트 차량은 제외 (장기는 별도 통계로만 표시)
@@ -1645,7 +1762,7 @@ function renderStats(){
     <div class="stat amber ${statusFilter==='대기'?'active':''}" onclick="toggleStatusFilter('대기')"><b>${idle}</b><span>대기</span></div>
     <div class="stat blue ${statusFilter==='준비중'?'active':''}" onclick="toggleStatusFilter('준비중')"><b>${prep}</b><span>준비중</span></div>
     <div class="stat green ${statusFilter==='운행중'?'active':''}" onclick="toggleStatusFilter('운행중')"><b>${running}</b><span>운행중</span></div>
-    <div class="stat purple ${statusFilter==='장기'?'active':''}" onclick="toggleStatusFilter('장기')"><b>${longCount}대</b><span>장기</span></div>
+    <div class="stat purple ${statusFilter===LONG_BRANCH?'active':''}" onclick="toggleStatusFilter('${LONG_BRANCH}')"><b>${longCount}대</b><span>${escapeHtml(LONG_BRANCH)}</span></div>
     <div class="stat purple"><b>${longAmount.toLocaleString()}만</b><span>장기금액</span></div>
   `;
 }
@@ -1660,9 +1777,9 @@ function render(){
       if(!hay.includes(q)) return false;
     }
     if(statusFilter){
-      if(statusFilter==='장기'){ if(v.type !== '장기') return false; }
+      if(statusFilter===LONG_BRANCH){ if(v.type !== LONG_BRANCH) return false; }
       else{
-        const isRunning = v.status !== '대기' && v.status !== '준비중' && v.type !== '장기';
+        const isRunning = v.status !== '대기' && v.status !== '준비중' && v.type !== LONG_BRANCH;
         if(statusFilter==='운행중'){ if(!isRunning) return false; }
         else if(v.status !== statusFilter) return false;
       }
@@ -1686,11 +1803,11 @@ function render(){
 
   const groups = {};
   list.forEach(v=>{
-    const b = v.branch || '장성';
+    const b = v.branch || HOME_BRANCH;
     if(!groups[b]) groups[b]=[];
     groups[b].push(v);
   });
-  const DISPLAY_ORDER = ['장성','장기'];
+  const DISPLAY_ORDER = [HOME_BRANCH, LONG_BRANCH];
   const order = [...DISPLAY_ORDER.filter(b=>groups[b]), ...Object.keys(groups).filter(b=>!DISPLAY_ORDER.includes(b))];
 
   main.innerHTML = order.map(branch=>{
@@ -1712,7 +1829,7 @@ function render(){
           <div class="cbody">
             <div class="row1">
               <span class="plate-tag plate">${escapeHtml(v.plate)}</span>
-              ${v.type?`<span class="type-badge tp-${v.type}">${escapeHtml(v.type)}</span>`:''}
+              ${v.type?`<span class="type-badge tp-${escapeHtml(v.type)}">${escapeHtml(v.type)}</span>`:''}
               <span class="badge ${sc}">${escapeHtml(statusLabel(v))}</span>
               ${due?`<span class="badge return-due">⏰ 반납일 도래</span>`:''}
               ${soon?`<span class="badge return-soon">🔔 반납임박</span>`:''}
@@ -1823,7 +1940,7 @@ async function setVehicleIdle(plate){
   v.amount = null;
   v.payDay = null;
   v.returnDate = null;
-  if(v.branch==='장기') v.branch = '장성';
+  if(v.branch===LONG_BRANCH) v.branch = HOME_BRANCH;
   render();
   await persist();
   showToast(`${plate} 대기 · 차고지로 변경되었습니다`);
@@ -1984,7 +2101,7 @@ function toggleExtraEdit(){
 }
 function toggleAmountField(prefix, clear){
   const type = document.getElementById(prefix+'Type').value;
-  const isLong = (type==='장기');
+  const isLong = (type===LONG_BRANCH);
   const isGeneral = (type==='일반');
   const needsMoneyInfo = isLong || isGeneral; // 장기(월세)든 일반(직접 수금)이든 금액/고객 정보가 필요함
   document.getElementById(prefix+'AmountField').style.display = needsMoneyInfo ? '' : 'none';
@@ -2030,7 +2147,7 @@ async function syncReturnSchedule(plate, oldDate, newDate, type, depositPaid){
   if(newDate){
     if(newDate !== oldDate){
       // 새 반납일이거나 날짜가 바뀐 경우: 완료 상태를 초기화하고 등록/갱신
-      await set(ref(db, 'schedules/'+key), {
+      await set(ref(db, P('schedules/'+key)), {
         title: `${plate} 차량 반납일`,
         date: newDate,
         repeat: false,
@@ -2044,12 +2161,12 @@ async function syncReturnSchedule(plate, oldDate, newDate, type, depositPaid){
       });
     } else {
       // 날짜는 그대로여도 입금 상태는 최신값으로 갱신 (완료 상태 등은 건드리지 않음)
-      await update(ref(db, 'schedules/'+key), { type: type || null, depositPaid: dp });
+      await update(ref(db, P('schedules/'+key)), { type: type || null, depositPaid: dp });
     }
   } else if(oldDate){
     // 반납일을 지웠다 = 차량이 회수됨 → 삭제 대신 완료 처리해서 기록을 남김 (회수시간 기록)
     // type도 이 시점 값으로 같이 저장(나중에 차량의 type이 초기화돼도 '일반' 여부를 알 수 있게)
-    await update(ref(db, 'schedules/'+key), { done: true, doneAt: new Date().toISOString(), plate: plate, type: type || null, depositPaid: dp });
+    await update(ref(db, P('schedules/'+key)), { done: true, doneAt: new Date().toISOString(), plate: plate, type: type || null, depositPaid: dp });
   }
 }
 
@@ -2091,10 +2208,10 @@ async function saveModal(){
   v.regDate = document.getElementById('mRegDate').value || null;
   v.ageExpireDate = document.getElementById('mAgeExpireDate').value || null;
   v.asYears = Number(document.getElementById('mAsYears').value) || AS_YEARS_DEFAULT;
-  if(v.type==='장기'){
-    v.branch = '장기';
-  }else if(v.branch==='장기'){
-    v.branch = '장성';
+  if(v.type===LONG_BRANCH){
+    v.branch = LONG_BRANCH;
+  }else if(v.branch===LONG_BRANCH){
+    v.branch = HOME_BRANCH;
   }
   closeModal();
   render();
@@ -2110,7 +2227,7 @@ async function deleteVehicle(){
   render();
   await persist({type:'delete', plate});
   const { ref, remove, db } = window._fb;
-  await remove(ref(db, 'schedules/'+scheduleKeyForPlate(plate)));
+  await remove(ref(db, P('schedules/'+scheduleKeyForPlate(plate))));
   showToast('차량이 삭제되었습니다');
 }
 function startDeletePress(){
@@ -2138,7 +2255,7 @@ function openAddModal(){
     document.getElementById(id).value = '';
   });
   document.getElementById('aInspectionType').value = '일반';
-  document.getElementById('aBranch').value = '장성';
+  document.getElementById('aBranch').value = HOME_BRANCH;
   document.getElementById('aAsYears').value = AS_YEARS_DEFAULT;
   updateAgeInfo('a');
   toggleAddDocsSection(false);
@@ -2164,7 +2281,7 @@ async function saveAddModal(){
     showToast('종별을 선택해주세요 (차령 자동계산에 필요해요)');
     return;
   }
-  const aBranch = document.getElementById('aBranch').value.trim() || '장성';
+  const aBranch = document.getElementById('aBranch').value.trim() || HOME_BRANCH;
   const newVehicle = {
     no:'+',
     plate,
@@ -2207,91 +2324,479 @@ function closeHistoryModal(){
   popModalHistoryIfNeeded('historyModalBg');
 }
 
-// ── 로그인 허용 계정(직원) 관리 ──────────────────────────────
-// 허용 목록은 Realtime Database의 config/allowedEmailsStr 에 ",이메일,이메일," 형태의
-// 문자열로 저장되고, Database 규칙이 "이 목록에 내 이메일이 있어야만 읽기/쓰기 허용"으로
-// 검사합니다. 그래서 이미 등록된 사람만 이 화면에서 새 사람을 추가/삭제할 수 있습니다.
-const ALLOWED_EMAILS_PATH = 'config/allowedEmailsStr';
-function parseEmailList(str){
-  return (str||'').split(',').map(s=>s.trim()).filter(Boolean);
-}
-function buildEmailListStr(emails){
-  return ',' + emails.join(',') + ',';
-}
+// ── 직원 관리 (업체 멤버 + 초대코드) ──────────────────────────────
+// 직원은 companies/{업체ID}/members 에 등록됩니다.
+// 관리자(owner)가 초대코드를 만들어서 알려주면, 직원이 그 코드로 가입해서 합류합니다.
 function closeStaffModal(){
   document.getElementById('staffModalBg').classList.remove('open');
   popModalHistoryIfNeeded('staffModalBg');
 }
-function renderStaffList(emails){
+function renderStaffList(members){
   const listEl = document.getElementById('staffList');
-  if(emails.length===0){
-    listEl.innerHTML = `<div class="empty">등록된 계정이 없어요.</div>`;
+  // 삭제된 직원은 값이 비어(null) 올 수 있어서 걸러냅니다.
+  // (예전에는 이걸 안 걸러서 직원을 내보낸 직후 목록 그리다가 오류가 났었습니다)
+  const entries = Object.entries(members || {}).filter(([,m]) => m && typeof m === 'object');
+  if(entries.length===0){
+    listEl.innerHTML = `<div class="empty">등록된 직원이 없어요.</div>`;
     return;
   }
-  const myEmail = window._fbUser && window._fbUser.email;
-  listEl.innerHTML = emails.map(email=>`
+  const myUid = window.CURRENT_USER && window.CURRENT_USER.uid;
+  const isOwner = window.COMPANY_ROLE === 'owner';
+  // 관리자를 위로, 그다음 가입순
+  entries.sort((a,b)=>{
+    if(a[1].role !== b[1].role) return a[1].role === 'owner' ? -1 : 1;
+    return (a[1].joinedAt||'').localeCompare(b[1].joinedAt||'');
+  });
+  listEl.innerHTML = entries.map(([uid,m])=>{
+    const isMe = uid === myUid;
+    const roleTag = m.role === 'owner'
+      ? '<span style="color:var(--amber);font-size:11px;">관리자</span>'
+      : '<span style="color:var(--sub);font-size:11px;">직원</span>';
+    // 관리자만 삭제 가능. 단, 자기 자신(관리자)은 삭제 불가.
+    const canDelete = isOwner && !isMe;
+    return `
     <div class="sched-list-row">
-      <div class="t">${escapeHtml(email)}${email===myEmail?' <span style="color:var(--sub);font-size:11px;">(나)</span>':''}</div>
-      <button class="del" onclick="removeStaffEmail('${escapeHtml(email).replace(/'/g,"\\'")}')">✕ 삭제</button>
-    </div>`).join('');
+      <div class="t">${escapeHtml(m.email||'(이메일 없음)')} ${roleTag}${isMe?' <span style="color:var(--sub);font-size:11px;">(나)</span>':''}</div>
+      ${canDelete?`<button class="del" onclick="removeStaffMember('${uid}','${escapeHtml(m.email||'')}')">✕ 내보내기</button>`:''}
+    </div>`;
+  }).join('');
 }
 async function openStaffModal(){
   document.getElementById('staffModalBg').classList.add('open');
   pushModalHistoryState('staffModalBg');
   const listEl = document.getElementById('staffList');
   listEl.innerHTML = `<div class="empty">불러오는 중...</div>`;
+  // 초대코드 영역은 관리자에게만 보여줌
+  const inviteBox = document.getElementById('staffInviteBox');
+  if(inviteBox) inviteBox.style.display = (window.COMPANY_ROLE==='owner') ? 'block' : 'none';
   const { ref, get, db } = window._fb;
   try{
-    const snap = await get(ref(db, ALLOWED_EMAILS_PATH));
-    renderStaffList(parseEmailList(snap.exists() ? snap.val() : ''));
+    const snap = await get(ref(db, P('members')));
+    renderStaffList(snap.exists() ? snap.val() : {});
   }catch(e){
     console.error(e);
     listEl.innerHTML = `<div class="empty">불러오기 실패했어요.</div>`;
   }
 }
-async function addStaffEmail(){
-  const input = document.getElementById('staffNewEmail');
-  const email = input.value.trim().toLowerCase();
-  if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-    showToast('올바른 이메일 형식으로 입력해주세요');
+// 초대코드 새로 만들기 (관리자만)
+async function createInviteCode(){
+  if(window.COMPANY_ROLE !== 'owner'){ showToast('관리자만 초대코드를 만들 수 있어요'); return; }
+  const { ref, set, db } = window._fb;
+  const code = FleetAuth.makeInviteCode();
+  try{
+    // inviteIndex: 코드 -> 업체ID (가입하려는 사람이 아직 멤버가 아니어도 조회할 수 있어야 해서 별도로 둠)
+    await set(ref(db, 'inviteIndex/' + code), {
+      companyId: window.COMPANY_ID,
+      createdAt: new Date().toISOString()
+    });
+    document.getElementById('staffInviteCode').textContent = code;
+    document.getElementById('staffInviteResult').style.display = 'block';
+    showToast('초대코드가 만들어졌어요');
+  }catch(e){
+    console.error(e);
+    showToast('초대코드 생성 실패 - 다시 시도해주세요');
+  }
+}
+function copyInviteCode(){
+  const code = document.getElementById('staffInviteCode').textContent;
+  if(!code) return;
+  navigator.clipboard.writeText(code)
+    .then(()=>showToast('초대코드를 복사했어요'))
+    .catch(()=>showToast('복사 실패 - 직접 입력해주세요'));
+}
+async function removeStaffMember(uid, email){
+  if(!confirm(`"${email}" 직원을 내보낼까요?\n이 직원은 더 이상 이 업체 데이터를 볼 수 없게 됩니다.`)) return;
+  const { ref, remove, get, db } = window._fb;
+  try{
+    // 실제로 접근을 막는 건 이 members 항목입니다. 이것만 지워지면 그 직원은
+    // 더 이상 이 업체 데이터를 읽지도 쓰지도 못합니다.
+    await remove(ref(db, P('members/' + uid)));
+
+    // userIndex/{남의 uid} 는 보안규칙상 본인만 지울 수 있어서 관리자는 못 지웁니다.
+    // 안 지워져도 접근은 이미 차단된 상태이고, 그 직원이 다음에 로그인하면
+    // '소속 업체 없음' 화면으로 안내되므로 실패해도 그냥 넘어갑니다.
+    try{ await remove(ref(db, 'userIndex/' + uid)); }
+    catch(e2){ console.warn('userIndex 정리는 건너뜀(권한 없음, 정상):', e2 && e2.code); }
+
+    const snap = await get(ref(db, P('members')));
+    renderStaffList(snap.exists() ? snap.val() : {});
+    showToast('직원을 내보냈어요');
+  }catch(e){
+    console.error(e);
+    showToast('내보내기 실패 - 다시 시도해주세요');
+  }
+}
+// ── 직원 채팅 ────────────────────────────────────────────────
+// 업체별 단톡방 1개. /companies/{업체ID}/chat 아래에 메시지가 쌓입니다.
+// 지금은 글만 가능하고, 나중에 사진을 붙일 수 있게 type 필드를 미리 둡니다.
+const CHAT_KEEP = 200;        // 화면에 보여줄 최근 메시지 수
+let _chatMessages = {};       // 실시간으로 받아온 메시지
+let _chatStarted = false;     // 실시간 수신 시작 여부
+let _chatLastRead = 0;        // 내가 마지막으로 읽은 시각(ms)
+let _chatModalOpen = false;
+
+function chatTimeLabel(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  const h = d.getHours(), m = pad2(d.getMinutes());
+  const ampm = h < 12 ? '오전' : '오후';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${ampm} ${h12}:${m}`;
+}
+function chatDayLabel(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  const days=['일','월','화','수','목','금','토'];
+  return `${d.getFullYear()}.${pad2(d.getMonth()+1)}.${pad2(d.getDate())} (${days[d.getDay()]})`;
+}
+function chatSortedList(){
+  return Object.entries(_chatMessages || {})
+    .filter(([,m]) => m && typeof m === 'object' && m.text)
+    .sort((a,b) => (a[1].at||'').localeCompare(b[1].at||''))
+    .slice(-CHAT_KEEP);
+}
+function renderChatList(){
+  const el = document.getElementById('chatList');
+  if(!el) return;
+  const list = chatSortedList();
+  if(list.length === 0){
+    el.innerHTML = `<div class="empty">아직 대화가 없어요.<br>첫 메시지를 남겨보세요.</div>`;
     return;
   }
-  const { ref, get, set, db } = window._fb;
+  const myUid = window.CURRENT_USER && window.CURRENT_USER.uid;
+  const isOwner = window.COMPANY_ROLE === 'owner';
+  let lastDay = '';
+  el.innerHTML = list.map(([id, m])=>{
+    const day = chatDayLabel(m.at);
+    let sep = '';
+    if(day !== lastDay){ sep = `<div class="chat-daysep">${escapeHtml(day)}</div>`; lastDay = day; }
+    // 현황판이 자동으로 남긴 결과 메시지
+    if(m.type === 'system' || m.uid === 'system'){
+      return sep + `
+        <div class="chat-msg system">
+          <div class="bubble sysbubble">${escapeHtml(m.text)}</div>
+        </div>`;
+    }
+    const mine = m.uid === myUid;
+    // 내 메시지이거나 관리자면 삭제 가능
+    const canDel = mine || isOwner;
+    const who = mine ? '나' : (m.email || '알 수 없음');
+    return sep + `
+      <div class="chat-msg${mine?' mine':''}">
+        <div class="meta">${escapeHtml(who)} · ${escapeHtml(chatTimeLabel(m.at))}</div>
+        <div class="bubble">${escapeHtml(m.text)}</div>
+        ${canDel?`<button class="del-msg" onclick="deleteChatMessage('${escapeHtml(id)}')">삭제</button>`:''}
+      </div>`;
+  }).join('');
+}
+function scrollChatToBottom(){
+  const sc = document.getElementById('chatScroll');
+  if(sc) sc.scrollTop = sc.scrollHeight;
+}
+function updateChatBadge(){
+  const badge = document.getElementById('chatBadge');
+  if(!badge) return;
+  const myUid = window.CURRENT_USER && window.CURRENT_USER.uid;
+  // 내가 마지막으로 읽은 시각 이후에 "남이" 보낸 메시지 수
+  const unread = chatSortedList().filter(([,m])=>{
+    if(m.uid === myUid) return false;
+    const t = new Date(m.at).getTime();
+    return !isNaN(t) && t > _chatLastRead;
+  }).length;
+  if(unread > 0){
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    badge.style.display = 'flex';
+  }else{
+    badge.style.display = 'none';
+  }
+}
+// 실시간 수신 시작 (앱 시작 시 1회)
+function startChatSync(){
+  if(_chatStarted) return;
+  _chatStarted = true;
+  const { ref, onValue, get, db } = window._fb;
+  // 내가 마지막으로 읽은 시각 먼저 불러오기
+  const myUid = window.CURRENT_USER && window.CURRENT_USER.uid;
+  if(myUid){
+    get(ref(db, P('chatReads/' + myUid)))
+      .then(s=>{ if(s.exists()) _chatLastRead = Number(s.val()) || 0; updateChatBadge(); })
+      .catch(()=>{});
+  }
+  onValue(ref(db, P('chat')), (snap)=>{
+    _chatMessages = snap.exists() ? (snap.val() || {}) : {};
+    if(_chatModalOpen){
+      renderChatList();
+      scrollChatToBottom();
+      markChatRead();
+    }
+    updateChatBadge();
+  }, (err)=>{ console.error('채팅 수신 실패:', err); });
+}
+async function markChatRead(){
+  const myUid = window.CURRENT_USER && window.CURRENT_USER.uid;
+  if(!myUid) return;
+  _chatLastRead = Date.now();
+  updateChatBadge();
   try{
-    const snap = await get(ref(db, ALLOWED_EMAILS_PATH));
-    const emails = parseEmailList(snap.exists() ? snap.val() : '');
-    if(emails.includes(email)){
-      showToast('이미 등록된 계정이에요');
+    const { ref, set, db } = window._fb;
+    await set(ref(db, P('chatReads/' + myUid)), _chatLastRead);
+  }catch(e){ console.warn('읽음 표시 저장 실패(무시):', e && e.code); }
+}
+function openChatModal(){
+  _chatModalOpen = true;
+  document.getElementById('chatModalBg').classList.add('open');
+  pushModalHistoryState('chatModalBg');
+  renderChatList();
+  setTimeout(scrollChatToBottom, 30);
+  markChatRead();
+  const inp = document.getElementById('chatInput');
+  if(inp) setTimeout(()=>inp.focus(), 80);
+}
+function closeChatModal(){
+  _chatModalOpen = false;
+  document.getElementById('chatModalBg').classList.remove('open');
+  popModalHistoryIfNeeded('chatModalBg');
+}
+// ── 채팅 명령어 처리 ─────────────────────────────────────────
+// 텔레그램 봇처럼, 채팅창에 "9585 보험 선명 쏘나타" 라고 치면
+// 현황판 차량 정보가 실제로 바뀝니다. 명령이 아니면 그냥 대화로 저장됩니다.
+const CHAT_TYPE_KEYWORDS = ['보험', '서비스', '일반', LONG_BRANCH];
+const CHAT_STATUS_KEYWORDS = {
+  '준비중':'준비중', '준비':'준비중', '대기':'대기', '대기중':'대기', '운행중':'운행중', '운행':'운행중'
+};
+// 목록 조회 명령 (봇의 "전체차량/대기차량/..." 과 동일)
+const CHAT_LIST_COMMANDS = {
+  '준비차량': v => v.status === '준비중',
+  '대기차량': v => v.status === '대기',
+  '운행중차량': v => v.status !== '대기' && v.status !== '준비중' && v.type !== LONG_BRANCH,
+  '일반차량': v => v.type === '일반',
+  '장기차량': v => v.type === LONG_BRANCH,
+  '보험차량': v => v.type === '보험',
+  '서비스차량': v => v.type === '서비스'
+};
+const CHAT_HELP_TEXT =
+`📖 채팅으로 쓸 수 있는 명령
+• 상태 변경: "9585 보험 선명 쏘나타"
+• 준비중/대기: "9585 준비중 수완현대", "9585 대기"
+• 회수: "9585 회수"
+• 현재 상태 확인: "9585" (저장 안 함)
+• 목록 보기: 전체차량 / 준비차량 / 대기차량 / 운행중차량 / 일반차량 / 장기차량 / 보험차량 / 서비스차량
+• 이력 보기: "이력 9585"
+• 구분 키워드: 보험 / ${LONG_BRANCH} / 서비스 / 일반
+※ 명령이 아닌 말은 그냥 대화로 남습니다.`;
+
+function chatVehicleLine(v){
+  const loc = (v.note || '').replace(/\s*\[조치완료\]\s*/g,'').trim();
+  return `${v.plate} ${v.model || '모델 미상'} ${loc || '위치 미상'}`;
+}
+function buildChatListMessage(label, list){
+  if(list.length === 0) return `📋 ${label} 0대`;
+  return `📋 ${label} ${list.length}대\n` + list.map(chatVehicleLine).join('\n');
+}
+function buildChatFullList(){
+  const all = vehicles.filter(v=>v && v.plate);
+  if(all.length === 0) return '📋 등록된 차량이 없어요.';
+  const groups = [
+    ['준비차량', v => v.status === '준비중'],
+    ['대기차량', v => v.status === '대기'],
+    ['운행중차량', v => v.status !== '대기' && v.status !== '준비중' && v.type !== '서비스' && v.type !== LONG_BRANCH],
+    ['서비스차량', v => v.status !== '대기' && v.status !== '준비중' && v.type === '서비스'],
+    ['장기차량', v => v.status !== '대기' && v.status !== '준비중' && v.type === LONG_BRANCH]
+  ];
+  const secs = groups.map(([label,fn])=>[label, all.filter(fn)])
+    .filter(([,l])=>l.length>0)
+    .map(([label,l])=>`${label} ${l.length}대\n` + l.map(chatVehicleLine).join('\n'));
+  return `📋 전체차량 (${all.length}대)\n\n` + secs.join('\n\n');
+}
+// "이력 9585" 처럼, 단어 안에서 다른 숫자에 안 붙은 4자리만 찾습니다
+function extractChatPlate(text){
+  for(const t of text.trim().split(/\s+/)){
+    const m = t.match(/(?<!\d)\d{4}(?!\d)/);
+    if(m) return m[0];
+  }
+  return null;
+}
+async function buildChatHistoryMessage(plateToken){
+  const v = vehicles.find(x => x && x.plate && x.plate.endsWith(plateToken));
+  if(!v) return `❌ 뒷자리 ${plateToken} 차량을 찾을 수 없어요.`;
+  try{
+    const { ref, get, db } = window._fb;
+    const snap = await get(ref(db, P('plateHistory/' + v.plate)));
+    if(!snap.exists()) return `📋 ${v.plate} 이력이 아직 없어요.`;
+    const data = snap.val() || {};
+    const keys = Object.keys(data).sort().slice(-10);
+    if(keys.length === 0) return `📋 ${v.plate} 이력이 아직 없어요.`;
+    return `📋 ${v.plate} 최근 이력 (${keys.length}건)\n` +
+      keys.map((k,i)=>{ const e = data[k] || {}; return `${i+1}. ${e.time||''} - ${e.text||''}`; }).join('\n');
+  }catch(e){
+    console.error(e);
+    return '❌ 이력을 불러오지 못했어요.';
+  }
+}
+// 목록/이력/도움말 명령이면 결과 문구를, 아니면 null을 돌려줍니다.
+async function handleChatInfoCommand(text){
+  const key = text.trim();
+  if(key === '도움말' || key === '도움' || key.toLowerCase() === 'help') return CHAT_HELP_TEXT;
+  if(key === '전체차량') return buildChatFullList();
+  if(CHAT_LIST_COMMANDS[key]){
+    return buildChatListMessage(key, vehicles.filter(v => v && v.plate && CHAT_LIST_COMMANDS[key](v)));
+  }
+  if(/(이력|조회)/.test(key)){
+    const plate = extractChatPlate(key);
+    if(!plate) return '❌ "이력 9585" 처럼 차량번호 뒷 4자리와 같이 보내주세요.';
+    return await buildChatHistoryMessage(plate);
+  }
+  return null;
+}
+
+// "9585 ..." 처럼 첫 단어가 4자리 숫자로 시작하면 명령으로 봅니다.
+function parseChatCommand(text){
+  const raw = text.trim().split(/\s+/).filter(Boolean);
+  if(raw.length === 0) return null;
+  const first = raw[0].match(/^(\d{4})(.*)$/);
+  if(!first) return null;
+  const plateToken = first[1];
+  const rest = first[2] ? [first[2], ...raw.slice(1)] : raw.slice(1);
+
+  const isRecall = rest.includes('회수') || rest.includes('ㅎㅅ');
+  const statusToken = rest.find(t => CHAT_STATUS_KEYWORDS[t]);
+  const typeToken = rest.find(t => CHAT_TYPE_KEYWORDS.includes(t));
+  const noteTokens = rest.filter(t =>
+    t !== typeToken && t !== statusToken &&
+    t !== '회수' && t !== 'ㅎㅅ' && t !== '조완' && t !== 'ㅈㅇ' && t !== '조치완료'
+  );
+  return {
+    plateToken,
+    isRecall,
+    newStatus: statusToken ? CHAT_STATUS_KEYWORDS[statusToken] : null,
+    typeToken: typeToken || null,
+    note: noteTokens.join(' '),
+    isQueryOnly: !isRecall && !statusToken && !typeToken && noteTokens.length === 0
+  };
+}
+// 명령을 실제 차량 데이터에 적용. 결과 안내 문구를 돌려줍니다.
+async function applyChatCommand(cmd){
+  const idx = vehicles.findIndex(v => v && v.plate && v.plate.endsWith(cmd.plateToken));
+  if(idx === -1) return { ok:false, msg:`❌ 뒷자리 ${cmd.plateToken} 차량을 찾을 수 없어요.` };
+  const v = Object.assign({}, vehicles[idx]);
+
+  // 번호만 입력 → 조회만 (저장 안 함)
+  if(cmd.isQueryOnly){
+    return { ok:true, query:true,
+      msg:`📋 ${v.plate} (${v.model||'-'})\n- 구분: ${v.type||'-'}\n- 상태: ${v.status||'-'}\n- 메모: ${v.note||'-'}` };
+  }
+
+  const oldReturnDate = v.returnDate || null;
+  if(cmd.isRecall){
+    v.type=''; v.note='차고지'; v.status='대기';
+    v.startDate=null; v.amount=null; v.payDay=null; v.returnDate=null;
+    if(v.branch===LONG_BRANCH) v.branch=HOME_BRANCH;
+  }else{
+    if(cmd.typeToken){
+      v.type=cmd.typeToken; v.status='운행중'; v.startDate=todayStr();
+      v.amount=null; v.payDay=null; v.returnDate=null;
+      if(cmd.typeToken===LONG_BRANCH) v.branch=LONG_BRANCH;
+      else if(v.branch===LONG_BRANCH) v.branch=HOME_BRANCH;
+    }
+    if(cmd.newStatus){
+      v.status=cmd.newStatus;
+      if(cmd.newStatus!=='운행중') v.startDate=null;
+    }
+    if(cmd.note) v.note=cmd.note;
+  }
+
+  vehicles[idx]=v;
+  render();
+  await persist({type:'upsert', vehicle:v});
+  await syncReturnSchedule(v.plate, oldReturnDate, v.returnDate, v.type);
+
+  // 차량별 이력 기록 ("이력 9585" 로 조회할 수 있게)
+  try{
+    const { ref, push, db } = window._fb;
+    let hist = cmd.isRecall ? '회수 처리 → 대기' : '';
+    if(!cmd.isRecall){
+      if(cmd.typeToken) hist += cmd.typeToken;
+      if(cmd.newStatus) hist += (hist?' / ':'') + cmd.newStatus;
+      if(cmd.note) hist += (hist?' / ':'') + cmd.note;
+    }
+    const now = new Date();
+    await push(ref(db, P('plateHistory/' + v.plate)), {
+      time: `${pad2(now.getMonth()+1)}/${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`,
+      text: hist || '변경'
+    });
+  }catch(e){ console.warn('이력 기록 실패(무시):', e && e.code); }
+
+  return { ok:true,
+    msg:`✅ ${v.plate} (${v.model||'-'}) 변경됨\n- 구분: ${v.type||'-'}\n- 상태: ${v.status||'-'}\n- 메모: ${v.note||'-'}` };
+}
+
+async function sendChatMessage(){
+  const inp = document.getElementById('chatInput');
+  const btn = document.getElementById('chatSendBtn');
+  const text = (inp.value || '').trim();
+  if(!text) return;
+  if(text.length > 2000){ showToast('메시지가 너무 길어요 (2000자까지)'); return; }
+  const user = window.CURRENT_USER;
+  if(!user){ showToast('로그인 상태를 확인해주세요'); return; }
+  inp.value = '';
+  if(btn) btn.disabled = true;
+  try{
+    const { ref, push, db } = window._fb;
+    // 1) 입력한 내용은 항상 대화로 남깁니다 (누가 무슨 작업을 지시했는지 기록)
+    await push(ref(db, P('chat')), {
+      text: text, uid: user.uid, email: user.email || '',
+      at: new Date().toISOString(), type: 'text'
+    });
+
+    // 2) 목록/이력/도움말 같은 조회 명령 먼저 확인
+    let infoMsg = null;
+    try{ infoMsg = await handleChatInfoCommand(text); }
+    catch(err){ console.error(err); infoMsg = '⚠️ 조회 중 오류가 발생했어요.'; }
+    if(infoMsg !== null){
+      await push(ref(db, P('chat')), {
+        text: infoMsg, uid: 'system', email: '현황판',
+        at: new Date().toISOString(), type: 'system'
+      });
+      setTimeout(scrollChatToBottom, 50);
       return;
     }
-    emails.push(email);
-    await set(ref(db, ALLOWED_EMAILS_PATH), buildEmailListStr(emails));
-    input.value = '';
-    renderStaffList(emails);
-    showToast('계정이 추가됐어요');
+
+    // 3) 차량 변경 명령이면 실제로 적용하고, 결과를 시스템 메시지로 남깁니다
+    const cmd = parseChatCommand(text);
+    if(cmd){
+      let result;
+      try{
+        result = await applyChatCommand(cmd);
+      }catch(err){
+        console.error(err);
+        result = { ok:false, msg:'⚠️ 처리 중 오류가 발생했어요: ' + (err.message || err) };
+      }
+      await push(ref(db, P('chat')), {
+        text: result.msg, uid: 'system', email: '현황판',
+        at: new Date().toISOString(), type: 'system'
+      });
+      if(result.ok && !result.query) showToast('현황판에 반영됐어요');
+    }
+    setTimeout(scrollChatToBottom, 50);
   }catch(e){
     console.error(e);
-    showToast('추가 실패 - 다시 시도해주세요');
+    showToast('전송 실패 - 다시 시도해주세요');
+    inp.value = text; // 실패하면 입력값 되돌려줌
+  }finally{
+    if(btn) btn.disabled = false;
   }
 }
-async function removeStaffEmail(email){
-  const myEmail = window._fbUser && window._fbUser.email;
-  const msg = email===myEmail
-    ? '내 계정을 삭제하면 나도 바로 로그인이 막혀요. 정말 삭제할까요?'
-    : `"${email}" 계정을 삭제할까요? 이 계정은 더 이상 로그인할 수 없게 됩니다.`;
-  if(!confirm(msg)) return;
-  const { ref, get, set, db } = window._fb;
+async function deleteChatMessage(msgId){
+  if(!confirm('이 메시지를 삭제할까요?')) return;
   try{
-    const snap = await get(ref(db, ALLOWED_EMAILS_PATH));
-    const emails = parseEmailList(snap.exists() ? snap.val() : '').filter(e=>e!==email);
-    await set(ref(db, ALLOWED_EMAILS_PATH), buildEmailListStr(emails));
-    renderStaffList(emails);
-    showToast('계정이 삭제됐어요');
+    const { ref, remove, db } = window._fb;
+    await remove(ref(db, P('chat/' + msgId)));
   }catch(e){
     console.error(e);
-    showToast('삭제 실패 - 다시 시도해주세요');
+    showToast('삭제 실패 - 내 메시지만 지울 수 있어요');
   }
 }
+
 function formatHistoryTime(ts){
   const d = new Date(ts);
   const days=['일','월','화','수','목','금','토'];
@@ -2304,7 +2809,7 @@ async function openHistoryModal(){
   listEl.innerHTML = `<div class="empty">불러오는 중...</div>`;
   const { ref, get, db } = window._fb;
   try{
-    const snap = await get(ref(db, HISTORY_KEY));
+    const snap = await get(ref(db, P('history')));
     if(!snap.exists()){
       listEl.innerHTML = `<div class="empty">아직 변경 기록이 없어요.<br>다음 저장부터 자동으로 기록이 남아요.</div>`;
       return;
@@ -2330,7 +2835,7 @@ async function restoreHistory(key){
   if(!confirm('이 시점 상태로 되돌리시겠습니까?\n(되돌리기 전 현재 상태도 자동으로 기록에 남으니, 필요하면 다시 앞으로 되돌릴 수 있어요)')) return;
   const { ref, get, db } = window._fb;
   try{
-    const snap = await get(ref(db, HISTORY_KEY + '/' + key));
+    const snap = await get(ref(db, P('history/' + key)));
     if(!snap.exists()){ showToast('해당 기록을 찾을 수 없어요'); return; }
     vehicles = snap.val().vehicles || [];
     render();
@@ -2350,6 +2855,318 @@ function setDate(){
     `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 ${days[d.getDay()]}요일`;
 }
 
+// ── 직원 위치 공유 ─────────────────────────────────────────
+// 켠 사람끼리만 companies/{id}/locations/{uid}에 {lat,lng,email,at}로 저장됩니다.
+// 자발적(opt-in)으로만 켜지고, 끄면 즉시 내 위치가 지워집니다.
+const LOC_STALE_MS = 10 * 60 * 1000; // 10분 넘게 갱신 없으면 "오프라인" 취급
+let _locations = {};
+let _locWatchId = null;
+let _locSharing = false;
+let _locLastError = null;
+let _locModalOpen = false;
+let _locMap = null;
+let _locMarkers = {};
+// 카카오맵 SDK는 스크립트 태그를 동적으로 붙여서 불러옵니다 (키가 APP_CONFIG에 있어서).
+let _kakaoLoadPromise = null;
+function loadKakaoMaps(){
+  if(_kakaoLoadPromise) return _kakaoLoadPromise;
+  _kakaoLoadPromise = new Promise((resolve, reject)=>{
+    const key = window.APP_CONFIG && window.APP_CONFIG.kakaoMapKey;
+    if(!key || key === 'YOUR_KAKAO_JS_KEY'){
+      reject(new Error('카카오맵 키가 설정되지 않았어요 (APP_CONFIG.kakaoMapKey)'));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services`;
+    script.onload = ()=> window.kakao.maps.load(()=> resolve(window.kakao));
+    script.onerror = ()=> reject(new Error('카카오맵 스크립트 로딩 실패'));
+    document.head.appendChild(script);
+  });
+  return _kakaoLoadPromise;
+}
+function locTimeAgo(iso){
+  const t = new Date(iso).getTime();
+  if(isNaN(t)) return '';
+  const diffMin = Math.max(0, Math.round((Date.now() - t) / 60000));
+  if(diffMin < 1) return '방금 전';
+  if(diffMin < 60) return diffMin + '분 전';
+  return Math.round(diffMin / 60) + '시간 전';
+}
+function locActiveEntries(){
+  const myUid = window.CURRENT_USER && window.CURRENT_USER.uid;
+  return Object.entries(_locations || {})
+    .filter(([uid, v]) => v && typeof v === 'object' && typeof v.lat === 'number' && typeof v.lng === 'number')
+    .filter(([,v]) => (Date.now() - new Date(v.at).getTime()) <= LOC_STALE_MS)
+    .map(([uid, v]) => ({ uid, ...v, isMe: uid === myUid }));
+}
+function updateLocBadge(){
+  const badge = document.getElementById('locBadge');
+  if(!badge) return;
+  const n = locActiveEntries().length;
+  if(n > 0){ badge.textContent = String(n); badge.style.display = 'flex'; }
+  else{ badge.style.display = 'none'; }
+}
+async function ensureLocMap(){
+  if(_locMap) return _locMap;
+  try{
+    const kakao = await loadKakaoMaps();
+    const container = document.getElementById('locMap');
+    _locMap = new kakao.maps.Map(container, {
+      center: new kakao.maps.LatLng(35.3016, 126.7867), // 기본 중심: 장성
+      level: 7
+    });
+    return _locMap;
+  }catch(e){
+    console.error(e);
+    const container = document.getElementById('locMap');
+    if(container) container.innerHTML = `<div class="empty" style="padding:20px;">지도를 불러올 수 없어요.<br>(카카오맵 키 설정 필요)</div>`;
+    return null;
+  }
+}
+async function renderLocMarkers(){
+  const kakao = window.kakao;
+  const map = await ensureLocMap();
+  if(!map || !kakao) return;
+  const entries = locActiveEntries();
+  const seen = new Set();
+  entries.forEach(e=>{
+    seen.add(e.uid);
+    const pos = new kakao.maps.LatLng(e.lat, e.lng);
+    const label = (e.isMe ? '나' : (e.email || '직원')) + ' · ' + locTimeAgo(e.at);
+    if(_locMarkers[e.uid]){
+      _locMarkers[e.uid].marker.setPosition(pos);
+      _locMarkers[e.uid].info.setContent(`<div style="padding:6px 10px;font-size:12px;white-space:nowrap;">${escapeHtml(label)}</div>`);
+    }else{
+      const marker = new kakao.maps.Marker({ position: pos, map });
+      const info = new kakao.maps.InfoWindow({ content: `<div style="padding:6px 10px;font-size:12px;white-space:nowrap;">${escapeHtml(label)}</div>` });
+      kakao.maps.event.addListener(marker, 'click', ()=> info.open(map, marker));
+      _locMarkers[e.uid] = { marker, info };
+    }
+  });
+  Object.keys(_locMarkers).forEach(uid=>{
+    if(!seen.has(uid)){ _locMarkers[uid].marker.setMap(null); delete _locMarkers[uid]; }
+  });
+  if(entries.length){
+    const bounds = new kakao.maps.LatLngBounds();
+    entries.forEach(e=> bounds.extend(new kakao.maps.LatLng(e.lat, e.lng)));
+    map.setBounds(bounds);
+  }
+}
+function renderLocList(){
+  const el = document.getElementById('locList');
+  if(!el) return;
+  const entries = locActiveEntries().sort((a,b)=> a.isMe ? -1 : (b.isMe ? 1 : 0));
+  if(entries.length === 0){
+    el.innerHTML = `<div class="empty">지금 위치를 공유 중인 직원이 없어요.</div>`;
+    return;
+  }
+  el.innerHTML = entries.map(e=>`
+    <div class="sched-list-row">
+      <div class="t">${escapeHtml(e.isMe ? '나' : (e.email || '직원'))}${e.isMe ? ' <span style="color:var(--sub);font-size:11px;">(나)</span>' : ''}</div>
+      <div class="m">${escapeHtml(locTimeAgo(e.at))} 갱신</div>
+    </div>`).join('');
+}
+function startLocSync(){
+  const { ref, onValue, db } = window._fb;
+  onValue(ref(db, P('locations')), (snap)=>{
+    _locations = snap.exists() ? (snap.val() || {}) : {};
+    updateLocBadge();
+    if(_locModalOpen){ renderLocMarkers(); renderLocList(); }
+  }, (err)=> console.error('위치 수신 실패:', err));
+}
+// 업무시간(기본 09:00~18:00) 자동 스케줄 + 동의 여부 관리
+const LOC_WORK_START_MIN = 9 * 60;   // 09:00
+const LOC_WORK_END_MIN = 18 * 60;    // 18:00
+function todayStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function locConsentKey(){
+  const uid = window.CURRENT_USER && window.CURRENT_USER.uid;
+  return 'fleetLocConsent_' + (window.COMPANY_ID || 'default') + '_' + (uid || '');
+}
+function locOffOverrideKey(){
+  const uid = window.CURRENT_USER && window.CURRENT_USER.uid;
+  return 'fleetLocOffToday_' + (window.COMPANY_ID || 'default') + '_' + (uid || '');
+}
+function hasLocConsent(){
+  return localStorage.getItem(locConsentKey()) === '1';
+}
+function isTurnedOffToday(){
+  return localStorage.getItem(locOffOverrideKey()) === todayStr();
+}
+function isWithinWorkHours(){
+  const d = new Date();
+  const mins = d.getHours() * 60 + d.getMinutes();
+  return mins >= LOC_WORK_START_MIN && mins < LOC_WORK_END_MIN;
+}
+function refreshLocConsentUI(){
+  const consentBox = document.getElementById('locConsentBox');
+  const mainBox = document.getElementById('locMainBox');
+  const btn = document.getElementById('locToggleBtn');
+  const agreed = hasLocConsent();
+  if(consentBox) consentBox.style.display = agreed ? 'none' : 'block';
+  if(mainBox) mainBox.style.display = agreed ? 'block' : 'none';
+  if(btn) btn.style.display = agreed ? 'block' : 'none';
+}
+function agreeLocationConsent(){
+  const check = document.getElementById('locConsentCheck');
+  if(!check || !check.checked){ showToast('동의 체크박스를 눌러주세요'); return; }
+  localStorage.setItem(locConsentKey(), '1');
+  localStorage.removeItem(locOffOverrideKey());
+  refreshLocConsentUI();
+  renderLocMarkers(); renderLocList();
+  if(isWithinWorkHours()) startLocationSharing(true);
+  showToast('동의되었어요 · 업무시간엔 자동으로 공유돼요');
+}
+function locStatusMessage(){
+  if(_locSharing) return '🟢 지금 동료들에게 공유되고 있어요';
+  if(!hasLocConsent()) return '';
+  if(_locLastError) return '⚠️ 위치 권한을 확인해주세요 (브라우저/폰 설정에서 위치 접근 허용 필요)';
+  if(isTurnedOffToday()) return '오늘은 직접 꺼두셨어요 · 내일 09:00부터 다시 자동으로 켜져요';
+  if(!isWithinWorkHours()) return '지금은 업무시간(09:00~18:00)이 아니라서 꺼져있어요';
+  return '곧 자동으로 켜져요...';
+}
+function setLocToggleBtnUI(){
+  const btn = document.getElementById('locToggleBtn');
+  if(btn){
+    btn.textContent = _locSharing ? '⏹ 내 위치 공유 끄기' : '📍 내 위치 공유 시작';
+    btn.style.background = _locSharing ? 'var(--panel2)' : 'var(--amber)';
+    btn.style.color = _locSharing ? 'var(--text)' : '#1a1a1a';
+  }
+  const statusEl = document.getElementById('locStatusMsg');
+  if(statusEl) statusEl.textContent = locStatusMessage();
+}
+async function writeMyLocation(pos){
+  const myUid = window.CURRENT_USER && window.CURRENT_USER.uid;
+  if(!myUid) return;
+  const { ref, set, db } = window._fb;
+  try{
+    await set(ref(db, P('locations/' + myUid)), {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      email: (window.CURRENT_USER && window.CURRENT_USER.email) || '',
+      at: new Date().toISOString()
+    });
+  }catch(e){ console.warn('위치 저장 실패:', e && e.code); }
+}
+function startLocationSharing(silent){
+  if(!hasLocConsent()){
+    if(!silent) showToast('먼저 위치 공유에 동의해주세요');
+    return;
+  }
+  if(_locWatchId !== null) return; // 이미 켜져있음
+
+  // Capacitor 앱(네이티브)으로 감싼 경우: @capacitor/geolocation 플러그인 사용
+  // (안드로이드 WebView는 navigator.geolocation만으론 권한 팝업이 제대로 안 뜨는 경우가 많음)
+  const capGeo = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()
+    && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+  if(capGeo){
+    (async ()=>{
+      try{
+        const perm = await capGeo.requestPermissions();
+        if(perm.location !== 'granted' && perm.coarseLocation !== 'granted'){
+          throw new Error('permission-denied');
+        }
+        _locWatchMode = 'capacitor';
+        _locWatchId = await capGeo.watchPosition(
+          { enableHighAccuracy: false, timeout: 15000 },
+          (pos, err)=>{
+            if(err || !pos){
+              console.warn('위치 권한/수신 실패:', err);
+              _locLastError = err || new Error('no-position');
+              if(!silent) showToast('위치 권한을 허용해주세요');
+              stopLocationSharing();
+              return;
+            }
+            _locLastError = null; _locSharing = true; setLocToggleBtnUI(); writeMyLocation(pos);
+          }
+        );
+        localStorage.removeItem(locOffOverrideKey());
+      }catch(err){
+        console.warn('위치 권한/수신 실패:', err);
+        _locLastError = err;
+        if(!silent) showToast('위치 권한을 허용해주세요');
+        setLocToggleBtnUI();
+      }
+    })();
+    return;
+  }
+
+  // 일반 브라우저 / PWA (홈화면에 추가): 표준 웹 위치 API
+  if(!('geolocation' in navigator)){
+    if(!silent) showToast('이 브라우저는 위치 기능을 지원하지 않아요');
+    return;
+  }
+  _locWatchMode = 'web';
+  _locWatchId = navigator.geolocation.watchPosition(
+    (pos)=>{ _locLastError = null; _locSharing = true; setLocToggleBtnUI(); writeMyLocation(pos); },
+    (err)=>{
+      console.warn('위치 권한/수신 실패:', err);
+      _locLastError = err;
+      if(!silent) showToast('위치 권한을 허용해주세요');
+      stopLocationSharing();
+    },
+    { enableHighAccuracy: false, maximumAge: 20000, timeout: 15000 }
+  );
+  localStorage.removeItem(locOffOverrideKey());
+}
+async function stopLocationSharing(manual){
+  if(_locWatchId !== null){
+    try{
+      if(_locWatchMode === 'capacitor'){
+        const capGeo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+        if(capGeo) await capGeo.clearWatch({ id: _locWatchId });
+      }else{
+        navigator.geolocation.clearWatch(_locWatchId);
+      }
+    }catch(e){ console.warn('위치 감시 해제 실패:', e); }
+    _locWatchId = null;
+    _locWatchMode = null;
+  }
+  _locSharing = false;
+  setLocToggleBtnUI();
+  // 직접 끈 경우엔, 오늘은 업무시간이어도 자동으로 다시 켜지지 않게 기록해둡니다.
+  if(manual) localStorage.setItem(locOffOverrideKey(), todayStr());
+  const myUid = window.CURRENT_USER && window.CURRENT_USER.uid;
+  if(myUid){
+    try{ const { ref, remove, db } = window._fb; await remove(ref(db, P('locations/' + myUid))); }
+    catch(e){ console.warn('위치 삭제 실패:', e && e.code); }
+  }
+}
+function toggleLocationShare(){
+  if(_locSharing || _locWatchId !== null) stopLocationSharing(true);
+  else startLocationSharing(false);
+}
+function openLocModal(){
+  _locModalOpen = true;
+  document.getElementById('locModalBg').classList.add('open');
+  pushModalHistoryState('locModalBg');
+  refreshLocConsentUI();
+  setLocToggleBtnUI();
+  setTimeout(async ()=>{ await renderLocMarkers(); renderLocList(); }, 30);
+}
+function closeLocModal(){
+  _locModalOpen = false;
+  document.getElementById('locModalBg').classList.remove('open');
+  popModalHistoryIfNeeded('locModalBg');
+}
+// 동의했고, 오늘 직접 끄지 않았고, 지금이 업무시간(09:00~18:00)이면 자동으로 켭니다.
+// 18:00이 지났으면 자동으로 끕니다. 30초마다 검사해서 시간이 되는 순간 바로 반영됩니다.
+function checkLocSchedule(){
+  if(!hasLocConsent()) return;
+  const within = isWithinWorkHours();
+  if(within){
+    if(!_locSharing && !isTurnedOffToday()) startLocationSharing(true);
+  }else{
+    if(_locSharing) stopLocationSharing(false); // 시간이 지나서 자동으로 끄는 것 - 오늘 끔 기록은 안 남김
+  }
+}
+function resumeLocationShareIfNeeded(){
+  setInterval(checkLocSchedule, 30000);
+  checkLocSchedule();
+}
+
 async function startApp(){
   setDate();
   const ok = await loadData();
@@ -2359,10 +3176,13 @@ async function startApp(){
   await loadSchedules();
   renderSchedBanner();
   startScheduleSync();
+  startChatSync();
+  startLocSync();
+  resumeLocationShareIfNeeded();
   await syncAllReturnSchedules();
 }
 
-checkSitePin();
+// 앱 시작은 FleetAuth가 로그인+업체확인을 마친 뒤 onReady에서 startApp()을 호출합니다.
 </script>
 <script>
   if('serviceWorker' in navigator){
